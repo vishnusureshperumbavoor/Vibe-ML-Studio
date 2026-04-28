@@ -1,0 +1,5 @@
+{
+  "name": "Gemini Notebook",
+  "description": "A Jupyter-style notebook interface powered by Gemini. Write Markdown, generate code, and simulate execution results.",
+  "requestFramePermissions": []
+}

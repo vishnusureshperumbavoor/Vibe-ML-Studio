@@ -1,0 +1,35 @@
+# VML Studio - Core Server Requirements
+fastapi>=0.110.0
+uvicorn>=0.29.0
+pydantic>=2.6.0
+python-dotenv
+psutil
+requests
+
+# VML Inference Engine (Native GGUF)
+llama-cpp-python
+diskcache
+
+# VML SFT Pipeline (Fine-Tuning)
+torch>=2.2.0
+transformers
+datasets
+trl
+peft
+accelerate
+bitsandbytes
+sentencepiece
+huggingface_hub
+
+# VML MCP Protocol
+mcp
+
+# VML RAG Pipeline (Intelligence Engine)
+chromadb
+sentence-transformers
+pymupdf
+beautifulsoup4
+lxml
+
+# Utilities
+numpy
