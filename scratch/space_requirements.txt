@@ -1,7 +1,0 @@
-
-torch
-transformers
-peft
-gradio
-accelerate
-sentencepiece
