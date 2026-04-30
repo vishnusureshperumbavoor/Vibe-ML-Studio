@@ -39,6 +39,7 @@ import { ChatView } from "./components/ChatView";
 import { WorkFlowSwitcher } from "./components/WorkFlowSwitcher";
 import { FineTuningPanel } from "./components/FineTuningPanel";
 import { QuantizationPanel } from "./components/QuantizationPanel";
+import { BenchmarkPanel } from "./components/BenchmarkPanel";
 
 const API_BASE = "http://127.0.0.1:2000";
 
@@ -146,7 +147,7 @@ export default function App() {
   const [activeView, setActiveView] = useState<
     "studio" | "chat" | "workflow" | "knowledge"
   >("knowledge");
-  const [workflowMode, setWorkflowMode] = useState<"quantize" | "finetune">(
+  const [workflowMode, setWorkflowMode] = useState<"quantize" | "finetune" | "evaluate">(
     "finetune",
   );
   const [isWorkflowExecuting, setIsWorkflowExecuting] = useState(false);
@@ -175,28 +176,40 @@ export default function App() {
   const [sftHardware, setSftHardware] = useState("CPU");
   const [sftMaxSteps, setSftMaxSteps] = useState(5);
   const [sftRank, setSftRank] = useState(16);
-  
+
   // Distillation State (Persistent across tab switches)
-  const [distillStatus, setDistillStatus] = useState({ step: 'idle', progress: 0, current_task: '' });
+  const [distillStatus, setDistillStatus] = useState({
+    step: "idle",
+    progress: 0,
+    current_task: "",
+  });
   const [showDistillUI, setShowDistillUI] = useState(false);
 
   useEffect(() => {
     // Poll distillation status globally if it's active
     let interval: any;
-    if (distillStatus.step !== 'idle' && distillStatus.step !== 'complete' && distillStatus.step !== 'error') {
+    if (
+      distillStatus.step !== "idle" &&
+      distillStatus.step !== "complete" &&
+      distillStatus.step !== "error"
+    ) {
       interval = setInterval(async () => {
         try {
           const resp = await fetch("http://127.0.0.1:2000/distill/status");
           const status = await resp.json();
           setDistillStatus(status);
-          if (status.step !== 'idle') setShowDistillUI(true);
-          
-          if (status.step === 'complete') {
-            const filename = status.current_task.split('Dataset ready: ')[1] || 
-                             status.current_task.split('Mission Accomplished! Published to: ')[1]?.split('/').pop() + '.jsonl';
-            
+          if (status.step !== "idle") setShowDistillUI(true);
+
+          if (status.step === "complete") {
+            const filename =
+              status.current_task.split("Dataset ready: ")[1] ||
+              status.current_task
+                .split("Mission Accomplished! Published to: ")[1]
+                ?.split("/")
+                .pop() + ".jsonl";
+
             if (filename) {
-               setPreSelectedDataset(filename);
+              setPreSelectedDataset(filename);
             }
           }
         } catch (e) {
@@ -1489,37 +1502,37 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
               <p className="text-sm text-white/40">Create your Expert LLMs.</p>
             </div>
 
-            {/* <WorkFlowSwitcher
+            <WorkFlowSwitcher
               active={workflowMode}
               onChange={setWorkflowMode}
-            /> */}
+            />
 
             <div className="w-full max-w-4xl bg-[#140F1D] border border-white/5 rounded-[32px] p-8 shadow-2xl relative group">
               <div className="absolute top-0 right-0 p-12 bg-amber-500/5 blur-[120px] rounded-full group-hover:bg-amber-500/10 transition-colors duration-1000" />
 
-              {/* {workflowMode === "finetune" ? ( */}
-              <FineTuningPanel
-                onStart={handleStartSFT}
-                isExecuting={isWorkflowExecuting}
-                systemInfo={systemInfo}
-                preSelectedDataset={preSelectedDataset}
-                onClearSelection={() => setPreSelectedDataset(null)}
-                deploymentUrl={deploymentUrl}
-                onTestInArena={() => {
-                  setActiveView("chat");
-                }}
-                modelId={sftModelId}
-                setModelId={setSftModelId}
-                datasetId={sftDatasetId}
-                setDatasetId={setSftDatasetId}
-                hardware={sftHardware}
-                setHardware={setSftHardware}
-                maxSteps={sftMaxSteps}
-                setMaxSteps={setSftMaxSteps}
-                rank={sftRank}
-                setRank={setSftRank}
-              />
-              {/* ) : (
+              {workflowMode === "finetune" ? (
+                <FineTuningPanel
+                  onStart={handleStartSFT}
+                  isExecuting={isWorkflowExecuting}
+                  systemInfo={systemInfo}
+                  preSelectedDataset={preSelectedDataset}
+                  onClearSelection={() => setPreSelectedDataset(null)}
+                  deploymentUrl={deploymentUrl}
+                  onTestInArena={() => {
+                    setActiveView("chat");
+                  }}
+                  modelId={sftModelId}
+                  setModelId={setSftModelId}
+                  datasetId={sftDatasetId}
+                  setDatasetId={setSftDatasetId}
+                  hardware={sftHardware}
+                  setHardware={setSftHardware}
+                  maxSteps={sftMaxSteps}
+                  setMaxSteps={setSftMaxSteps}
+                  rank={sftRank}
+                  setRank={setSftRank}
+                />
+              ) : workflowMode === "quantize" ? (
                 <QuantizationPanel
                   onStart={handleStartQuantization}
                   isExecuting={isWorkflowExecuting}
@@ -1529,7 +1542,9 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
                     setActiveView("chat");
                   }}
                 />
-              )} */}
+              ) : (
+                <BenchmarkPanel systemInfo={systemInfo} />
+              )}
             </div>
           </div>
         ) : (

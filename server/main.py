@@ -13,6 +13,7 @@ from inference import native_manager
 from typing import List, Optional
 from distillation_service import distiller
 from dataset_uploader import upload_dataset_to_hf
+from benchmark_runner import runner as bench_runner
 
 # Load HF_TOKEN from server/.env or project root
 load_dotenv() # Check server/
@@ -364,8 +365,51 @@ async def save_token(payload: dict = Body(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# --- Distillation & HF Deployment Endpoints ---
+class BenchmarkRequest(BaseModel):
+    dataset: str
+    model_filename: str
+    lora_slug: Optional[str] = None
+    num_questions: int = 50
 
+@app.post("/benchmark/run")
+async def run_benchmark(req: BenchmarkRequest):
+    """
+    Runs a benchmark (MMLU or GSM8K) against a given model or adapter.
+    """
+    try:
+        # Load the model into the NativeInferenceManager
+        lora_path = None
+        if req.lora_slug:
+            abs_lora_dir = os.path.join(ADAPTERS_DIR, req.lora_slug)
+            if os.path.exists(abs_lora_dir):
+                lora_path = abs_lora_dir
+                
+        native_manager.load_model(req.model_filename, lora_path)
+
+        # Run the benchmark asynchronously to prevent blocking the event loop
+        loop = asyncio.get_event_loop()
+        
+        if req.dataset.lower() == "gsm8k":
+            result = await loop.run_in_executor(None, bench_runner.run_gsm8k, req.model_filename, lora_path, req.num_questions)
+        elif req.dataset.lower() == "mmlu":
+            result = await loop.run_in_executor(None, bench_runner.run_mmlu, req.model_filename, lora_path, req.num_questions)
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported benchmark dataset: {req.dataset}")
+            
+        if "error" in result:
+            raise HTTPException(status_code=500, detail=result["error"])
+            
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/benchmark/status")
+async def get_benchmark_status():
+    """Polls the current status of the benchmark runner."""
+    return bench_runner.status
+
+# --- Distillation & HF Deployment Endpoints ---
 class DistillRequest(BaseModel):
     collection_name: str
     dataset_name: Optional[str] = None

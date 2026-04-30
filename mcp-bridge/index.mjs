@@ -17,7 +17,7 @@ const HF_TOKEN = process.env.HF_TOKEN;
 let mcpClient = null;
 
 async function initMCP() {
-    console.log("🚀 [Node Bridge] Spawning Vibe ML MCP Server...");
+    console.log("🚀 Connecting to Vibe ML MCP Server...");
     
     // We launch the Python executable, and pass your agent_orchestrator.py as the argument!
     const pythonExec = path.resolve('../server/venv/Scripts/python.exe');
@@ -39,10 +39,10 @@ async function initMCP() {
     
     try {
         await client.connect(transport);
-        console.log("✅ [Node Bridge] Successfully connected to Vibe ML MCP Server!");
+        console.log("✅ Successfully connected to Vibe ML MCP Server!");
         mcpClient = client;
     } catch (e) {
-        console.error("❌ [Node Bridge] Connection failed:", e);
+        console.error("❌ Connection failed:", e);
     }
 }
 

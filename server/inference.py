@@ -114,6 +114,13 @@ class NativeInferenceManager:
                         "tps": round(tps, 2)
                     }
 
+    def chat(self, model_filename: str, lora_path: str, messages: List[Dict]) -> str:
+        """Synchronous chat method for benchmarking and programmatic access."""
+        output = ""
+        for chunk in self.chat_stream(model_filename, lora_path, messages):
+            output += chunk.get("content", "")
+        return output
+
 # Singleton instance
 base_dir = os.path.dirname(os.path.abspath(__file__))
 native_manager = NativeInferenceManager(os.path.join(base_dir, "models", "gguf"))
