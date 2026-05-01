@@ -473,9 +473,35 @@ ${assistantMsg.content}`;
       inputRef.current?.focus();
     }, 0);
     
-    const promises = [fetchStream(selectedModel, newModelHistoryA, setMessagesA, setIsSendingA, abortA)];
-    if (isSplitMode && selectedModel2) {
-      promises.push(fetchStream(selectedModel2, newModelHistoryB, setMessagesB, setIsSendingB, abortB));
+    // 2. Identify if we should use local ONNX or Server API
+    const modelA = allModels.find(m => m.name === selectedModel);
+    const modelB = selectedModel2 ? allModels.find(m => m.name === selectedModel2) : null;
+
+    const executeChat = async (model: any, history: Message[], setMsgs: any, setIsSending: any, abort: any) => {
+      if (model?.source === 'onnx' && model.onnx_slug) {
+        setIsSending(true);
+        setMsgs(prev => [...prev, { role: 'assistant', content: '', reasoning: '' }]);
+        
+        // Ensure session is ready
+        await onnxService.initSession(model.onnx_slug);
+        
+        await onnxService.generate(history[history.length-1].content, (token) => {
+          setMsgs(prev => {
+            const newMessages = [...prev];
+            const last = newMessages[newMessages.length - 1];
+            newMessages[newMessages.length - 1] = { ...last, content: last.content + token };
+            return newMessages;
+          });
+        });
+        setIsSending(false);
+      } else {
+        await fetchStream(model?.name || selectedModel, history, setMsgs, setIsSending, abort);
+      }
+    };
+
+    const promises = [executeChat(modelA, newModelHistoryA, setMessagesA, setIsSendingA, abortA)];
+    if (isSplitMode && modelB) {
+      promises.push(executeChat(modelB, newModelHistoryB, setMessagesB, setIsSendingB, abortB));
     }
     
     await Promise.all(promises);

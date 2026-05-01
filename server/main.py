@@ -487,26 +487,43 @@ async def reset_distill():
 async def list_local_base_models():
     """Scans server/models/base_models for downloaded HF repositories."""
     results = []
-    if not os.path.exists(MODELS_DIR):
-        return {"models": []}
-        
-    for d in os.listdir(MODELS_DIR):
-        dir_path = os.path.join(MODELS_DIR, d)
-        if os.path.isdir(dir_path):
-            # Attempt to restore the HF repo ID from the directory name
-            # (Matches the replace('/', '_') logic in the training scripts)
-            # In a production app, we'd store a .meta file, but this heuristic works for now
-            display_id = d.replace('_', '/')
-            
-            # Basic validation: check for a config.json or safetensors
-            if any(f in os.listdir(dir_path) for f in ["config.json", "model.safetensors", "pytorch_model.bin"]):
-                results.append({
-                    "id": display_id,
-                    "is_local": True,
-                    "is_cpu_ready": "0.5b" in display_id.lower() or "360m" in display_id.lower(),
-                    "downloads": 0,
-                    "likes": 0
+    # 1. Base Models
+    if os.path.exists(MODELS_DIR):
+        for d in os.listdir(MODELS_DIR):
+            dir_path = os.path.join(MODELS_DIR, d)
+            if os.path.isdir(dir_path) and any(f in os.listdir(dir_path) for f in ["config.json", "model.safetensors", "pytorch_model.bin"]):
+                results.append({ "id": d.replace('_', '/'), "name": d, "type": "base", "source": "native" })
+
+    # 2. Adapters (Fine-tuned)
+    if os.path.exists(ADAPTERS_DIR):
+        for d in os.listdir(ADAPTERS_DIR):
+            dir_path = os.path.join(ADAPTERS_DIR, d)
+            if os.path.isdir(dir_path) and "adapter_config.json" in os.listdir(dir_path):
+                results.append({ "id": d, "name": d, "type": "adapter", "source": "native", "lora_slug": d })
+
+    # 3. GGUF (Quantized)
+    if os.path.exists(GGUF_DIR):
+        for f in os.listdir(GGUF_DIR):
+            if f.endswith(".gguf"):
+                results.append({ "id": f, "name": f, "type": "gguf", "source": "native" })
+
+    # 4. ONNX Exports (Browser)
+    if os.path.exists(ONNX_DIR):
+        for d in os.listdir(ONNX_DIR):
+            if "_final" in d:
+                # Extract precision from folder name (e.g., ..._fp16_final)
+                precision = "FP16"
+                if "int8" in d.lower(): precision = "INT8"
+                if "fp32" in d.lower(): precision = "FP32"
+                
+                results.append({ 
+                    "id": d, 
+                    "name": f"{d} ({precision})", 
+                    "type": "onnx", 
+                    "source": "onnx", 
+                    "onnx_slug": d 
                 })
+
     return {"models": results}
 
 @app.get("/list_local_datasets")

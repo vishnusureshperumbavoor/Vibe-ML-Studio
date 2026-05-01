@@ -23,8 +23,11 @@ def run_onnx_production():
     onnx_final_dir = os.path.join(export_root, f"onnx_{adapter_slug}_{precision.lower()}_final")
     os.makedirs(temp_merged_dir, exist_ok=True)
     os.makedirs(onnx_raw_dir, exist_ok=True)
-    skip_phase_1 = os.path.exists(temp_merged_dir)
-    skip_phase_2 = os.path.exists(onnx_raw_dir) and precision != "FP16"
+    
+    skip_phase_1 = os.path.exists(os.path.join(temp_merged_dir, "config.json"))
+    # Skip Phase 2 ONLY if the directory exists AND it actually contains a model file
+    has_raw_model = any(f.endswith(".onnx") for f in os.listdir(onnx_raw_dir)) if os.path.exists(onnx_raw_dir) else False
+    skip_phase_2 = has_raw_model and precision != "FP16"
     if skip_phase_1:
         print(f"⏩ Found existing merged weights at {temp_merged_dir}. Skipping Phase 1.")
     if skip_phase_2:
@@ -86,6 +89,13 @@ def run_onnx_production():
                 raise Exception(f"Quantization failed with exit code {ret}")
             final_path = onnx_final_dir
         else:
+            # If a broken final directory exists, remove it so we can move the fresh one in
+            if os.path.exists(onnx_final_dir):
+                is_broken = not any(f.endswith(".onnx") for f in os.listdir(onnx_final_dir))
+                if is_broken:
+                    print(f" Removing broken final directory: {onnx_final_dir}")
+                    shutil.rmtree(onnx_final_dir)
+            
             if os.path.exists(onnx_raw_dir) and not os.path.exists(onnx_final_dir):
                 print(f"Moving {onnx_raw_dir} to {onnx_final_dir}")
                 shutil.move(onnx_raw_dir, onnx_final_dir)
