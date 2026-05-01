@@ -52,9 +52,12 @@ class OnnxInferenceService {
    */
   async isModelReady(slug: string): Promise<boolean> {
     if (this.modelCache.has(slug)) return true;
-    const inDB = await this.getFromDB(slug);
-    if (inDB) {
-      this.modelCache.set(slug, inDB);
+    // Check for the new format key which includes the weight data link
+    const mainFile = await this.getFromDB(`${slug}_model.onnx`);
+    const dataFile = await this.getFromDB(`${slug}_model.onnx_data`);
+    
+    if (mainFile) {
+      this.modelCache.set(slug, mainFile);
       return true;
     }
     return false;
@@ -95,6 +98,14 @@ class OnnxInferenceService {
       }
 
       const filesToDownload = [modelFileName, 'tokenizer.json'];
+      
+      // Check for external data file (common in models > 2GB or specific exports)
+      const dataFileResp = await fetch(`http://127.0.0.1:2000/onnx_models/${slug}/${modelFileName}_data`, { method: 'HEAD' });
+      if (dataFileResp.ok) {
+        filesToDownload.push(`${modelFileName}_data`);
+        totalSize += parseInt(dataFileResp.headers.get('content-length') || '0', 10);
+      }
+
       let totalLoaded = 0;
       let finalModelBuffer: ArrayBuffer | null = null;
 
@@ -122,15 +133,14 @@ class OnnxInferenceService {
         
         const blob = new Blob(chunks);
         const buffer = await blob.arrayBuffer();
-        if (fileName.endsWith('.onnx')) {
+        
+        // Save to IndexedDB (either as main model or as external data)
+        await this.saveToDB(`${slug}_${fileName}`, buffer);
+
+        if (fileName === modelFileName) {
             finalModelBuffer = buffer;
             this.modelCache.set(slug, buffer);
         }
-      }
-
-      // Persist the model buffer to IndexedDB
-      if (finalModelBuffer) {
-        await this.saveToDB(slug, finalModelBuffer);
       }
 
       return true;
@@ -142,16 +152,32 @@ class OnnxInferenceService {
 
   async initSession(slug: string): Promise<boolean> {
     try {
+      // 1. Get the main model header
       let modelData = this.modelCache.get(slug);
       if (!modelData) {
-        modelData = await this.getFromDB(slug) || undefined;
+        modelData = await this.getFromDB(`${slug}_model.onnx`) || await this.getFromDB(slug) || undefined;
       }
-      if (!modelData) throw new Error("Model data not found.");
+      if (!modelData) throw new Error("Model header not found.");
 
-      this.session = await ort.InferenceSession.create(modelData, {
+      const options: ort.InferenceSession.SessionOptions = {
         executionProviders: ['webgpu', 'wasm'],
         graphOptimizationLevel: 'all'
-      });
+      };
+
+      // 2. Check for external weights and link them
+      const externalWeights = await this.getFromDB(`${slug}_model.onnx_data`);
+      if (externalWeights) {
+        console.log("🔗 Linking external ONNX weights (1GB)...");
+        (options as any).externalData = [
+          {
+            path: 'model.onnx_data',
+            data: new Uint8Array(externalWeights)
+          }
+        ];
+      }
+
+      this.session = await ort.InferenceSession.create(modelData, options);
+      console.log("✅ ONNX Session Ready with External Data");
       return true;
     } catch (error) {
       console.error("Session initialization failed:", error);

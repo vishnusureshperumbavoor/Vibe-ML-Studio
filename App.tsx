@@ -720,7 +720,15 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
           prev.map((c) => (c.id === cellId ? { ...c, output: partial } : c)),
         );
       },
-      () => {},
+      (plotPoint) => {
+        setCells((prev) =>
+          prev.map((c) =>
+            c.id === cellId
+              ? { ...c, plots: [...(c.plots || []), plotPoint] }
+              : c,
+          ),
+        );
+      },
     );
 
     setCells((prev) =>

@@ -10,7 +10,7 @@ import {
   AreaChart,
   Area
 } from 'recharts';
-import { Activity, Zap, Target, Gauge, Clock, ChevronRight, Loader2, CheckCircle2 } from 'lucide-react';
+import { Activity, Zap, Target, Gauge, Clock, ChevronRight, Loader2, CheckCircle2, Cpu } from 'lucide-react';
 
 interface PlotPoint {
   vml_step: number;
@@ -33,6 +33,53 @@ export const PlotView: React.FC<PlotViewProps> = ({ data, onOpenArena, metadata 
   const [now, setNow] = React.useState(Date.now());
   const hasTriggeredDeploy = React.useRef(false);
   
+  const isOnnxValidation = data.some(d => d.max_diff !== undefined);
+
+  if (isOnnxValidation) {
+    const getLatestMetric = (key: string, altKey?: string) => {
+      for (let i = data.length - 1; i >= 0; i--) {
+        if (data[i][key] !== undefined && data[i][key] !== null) return data[i][key];
+        if (altKey && data[i][altKey] !== undefined && data[i][altKey] !== null) return data[i][altKey];
+      }
+      return undefined;
+    };
+    const currentMaxDiff = getLatestMetric('max_diff');
+    const currentLayer = getLatestMetric('layer');
+    
+    return (
+      <div className="space-y-6 animate-in fade-in duration-700">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <MetricCard icon={<Target size={14} className="text-amber-500" />} label="Current Error" value={currentMaxDiff} precision={6} />
+          <MetricCard icon={<Zap size={14} className="text-purple-500" />} label="Active Layer" value={currentLayer} total={24} />
+          <MetricCard icon={<Activity size={14} className="text-emerald-500" />} label="Validation Status" value="Verifying..." />
+          <MetricCard icon={<Cpu size={14} className="text-blue-500" />} label="Backend" value="ONNX Runtime" />
+        </div>
+
+        <ChartContainer title="ONNX Precision Profile" subtitle="Max difference per layer (Lower is better)">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+            <AreaChart data={data}>
+              <defs>
+                <linearGradient id="colorDiff" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.1}/>
+                  <stop offset="95%" stopColor="#F59E0B" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#ffffff08" vertical={false} />
+              <XAxis dataKey="layer" type="number" domain={[0, 24]} tick={{fontSize: 10, fill: '#666'}} />
+              <YAxis domain={[0, 'auto']} hide />
+              <Tooltip 
+                contentStyle={{ backgroundColor: '#1A1625', border: '1px solid #3F3F46', fontSize: '10px', borderRadius: '8px' }}
+                itemStyle={{ color: '#F59E0B' }}
+                labelFormatter={(val) => `Layer ${val}`}
+              />
+              <Area type="monotone" dataKey="max_diff" stroke="#F59E0B" strokeWidth={2} fillOpacity={1} fill="url(#colorDiff)" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </ChartContainer>
+      </div>
+    );
+  }
+
   if (!data || data.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-64 border border-white/5 bg-black/20 rounded-2xl animate-pulse">
@@ -63,12 +110,7 @@ export const PlotView: React.FC<PlotViewProps> = ({ data, onOpenArena, metadata 
   const stepsPerSec = getLatestMetric('train_steps_per_second');
   const totalFlops = getLatestMetric('total_flos');
   const tflops = totalFlops ? (Number(totalFlops) / 1e12).toFixed(2) : undefined;
-  // Live Ticker for high-resolution clock
-  React.useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
+  
   const firstTime = data.find(d => d.timestamp)?.timestamp;
   const lastTime = samplesPerSec ? [...data].reverse().find(d => d.timestamp)?.timestamp : now;
   
@@ -79,8 +121,6 @@ export const PlotView: React.FC<PlotViewProps> = ({ data, onOpenArena, metadata 
     const secs = (diff % 60).toString().padStart(2, '0');
     durationStr = `${mins}:${secs}`;
   }
-
-
 
   return (
     <div className="space-y-6 animate-in fade-in duration-700">

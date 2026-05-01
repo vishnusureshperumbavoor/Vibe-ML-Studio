@@ -57,7 +57,23 @@ def run_onnx_production():
                 target_export_dir = onnx_final_dir
             cmd_export = f'optimum-cli export onnx --model {temp_merged_dir} --task text-generation-with-past {export_args} {target_export_dir}'
             print(f"Executing Export: {cmd_export}")
-            ret = os.system(cmd_export)
+            # Run and capture output to extract validation data for the chart
+            import subprocess
+            process = subprocess.Popen(cmd_export, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            for line in process.stdout:
+                print(line, end='')
+                if "max diff =" in line:
+                    try:
+                        # Extract layer number and diff value
+                        # Example: - present.0.value: max diff = 0.0001
+                        parts = line.split("present.")[1].split(".")
+                        layer_idx = int(parts[0])
+                        diff_val = float(line.split("max diff =")[1].strip().replace('.','',1).replace('.','')) # simple float extraction
+                        # Better regex-free extraction
+                        val_str = "".join(c for c in line.split("max diff =")[1] if c.isdigit() or c == '.')
+                        print(f"[VML_PLOT] {{\\"layer\\": {layer_idx}, \\"max_diff\\": {val_str}}}")
+                    except: pass
+            ret = process.wait()
             if ret != 0:
                 raise Exception(f"Export failed with exit code {ret}")
         final_path = onnx_raw_dir
