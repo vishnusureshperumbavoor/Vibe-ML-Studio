@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { MessageSquare, Send, User, Bot, ChevronDown, Trash2, Loader2, Sparkles, Square, Columns, Maximize2, Activity, Clock, Zap, Search, X, Database, FileText, Plus, CheckCircle2, Copy } from 'lucide-react';
+import { MessageSquare, Send, User, Bot, ChevronDown, Trash2, Loader2, Sparkles, Square, Columns, Maximize2, Activity, Clock, Zap, Search, X, Database, FileText, Plus, CheckCircle2, Copy, CloudDownload, DownloadCloud, CheckCircle, Cpu } from 'lucide-react';
+import { onnxService } from '../services/onnxInferenceService';
 import { Button } from './Button';
+import { useEffect, useRef, useState } from 'react';
 
 interface Message {
   role: 'user' | 'assistant' | 'system';
@@ -15,9 +16,10 @@ interface Message {
 
 interface VMLModel {
   name: string;
-  source: 'ollama' | 'native';
-  type?: 'base' | 'adapter';
+  source: 'ollama' | 'native' | 'onnx';
+  type?: 'base' | 'adapter' | 'onnx';
   lora_slug?: string;
+  onnx_slug?: string;
   details?: {
     parameter_size: string;
     family: string;
@@ -215,6 +217,8 @@ ${assistantMsg.content}`;
   const [messagesB, setMessagesB] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   
+  const [onnxStatus, setOnnxStatus] = useState<Record<string, { status: 'idle' | 'downloading' | 'ready', progress: number }>>({});
+  
   const [isSendingA, setIsSendingA] = useState(false);
   const [isSendingB, setIsSendingB] = useState(false);
   const isSending = isSendingA || isSendingB;
@@ -265,6 +269,23 @@ ${assistantMsg.content}`;
     if (allModels.length > 0) {
       if (!selectedModel) onModelChange(allModels[0].name);
       if (!selectedModel2) setSelectedModel2(allModels.length > 1 ? allModels[1].name : allModels[0].name);
+      
+      // Check which ONNX models are already in IndexedDB
+      const checkPersistence = async () => {
+        const statuses: any = {};
+        for (const m of allModels) {
+          if (m.source === 'onnx' && m.onnx_slug) {
+            const isReady = await onnxService.isModelReady(m.onnx_slug);
+            if (isReady) {
+              statuses[m.onnx_slug] = { status: 'ready', progress: 100 };
+            }
+          }
+        }
+        if (Object.keys(statuses).length > 0) {
+          setOnnxStatus(prev => ({ ...prev, ...statuses }));
+        }
+      };
+      checkPersistence();
     }
   }, [allModels.length, selectedModel, selectedModel2]);
 
@@ -460,29 +481,83 @@ ${assistantMsg.content}`;
     await Promise.all(promises);
   };
 
-  const ModelSelector = ({ val, onChange }: { val: string, onChange: (v: string) => void }) => (
-    <div className="relative group">
-      <select
-        value={val}
-        onChange={(e) => onChange(e.target.value)}
-        className="appearance-none bg-[#1D152A] border border-purple-500/30 text-[#E2D8F0] text-xs py-2 pl-3 pr-8 rounded-xl focus:outline-none focus:ring-1 focus:ring-purple-500 transition-all cursor-pointer hover:bg-[#251B36] max-w-[180px] truncate"
-        disabled={allModels.length === 0}
-      >
-        {allModels.length > 0 ? (
-          allModels.map((m) => (
-            <option key={`${m.source}-${m.name}`} value={m.name}>
-              {m.name.toUpperCase()} {m.details?.parameter_size ? `• ${m.details.parameter_size}` : ''}
-            </option>
-          ))
-        ) : (
-          <option>No Models Available</option>
+  const handleDownloadOnnx = async (model: VMLModel) => {
+    if (!model.onnx_slug) return;
+    const slug = model.onnx_slug;
+    
+    setOnnxStatus(prev => ({ ...prev, [slug]: { status: 'downloading', progress: 0 } }));
+    
+    const success = await onnxService.downloadModel(slug, (p) => {
+      setOnnxStatus(prev => ({ ...prev, [slug]: { status: 'downloading', progress: p.percentage } }));
+    });
+    
+    if (success) {
+      setOnnxStatus(prev => ({ ...prev, [slug]: { status: 'ready', progress: 100 } }));
+    } else {
+      setOnnxStatus(prev => ({ ...prev, [slug]: { status: 'idle', progress: 0 } }));
+    }
+  };
+
+  const ModelSelector = ({ val, onChange }: { val: string, onChange: (v: string) => void }) => {
+    const selectedObj = allModels.find(m => m.name === val);
+    const isOnnx = selectedObj?.source === 'onnx';
+    const status = isOnnx && selectedObj?.onnx_slug ? onnxStatus[selectedObj.onnx_slug] : null;
+
+    return (
+      <div className="flex items-center gap-2">
+        <div className="relative group">
+          <select
+            value={val}
+            onChange={(e) => onChange(e.target.value)}
+            className="appearance-none bg-[#1D152A] border border-purple-500/30 text-[#E2D8F0] text-xs py-2 pl-3 pr-8 rounded-xl focus:outline-none focus:ring-1 focus:ring-purple-500 transition-all cursor-pointer hover:bg-[#251B36] max-w-[180px] truncate"
+            disabled={allModels.length === 0 || isSending}
+          >
+            {allModels.length > 0 ? (
+              allModels.map((m) => (
+                <option key={`${m.source}-${m.name}`} value={m.name}>
+                  {m.name.toUpperCase()} {m.details?.parameter_size ? `• ${m.details.parameter_size}` : ''}
+                </option>
+              ))
+            ) : (
+              <option>No Models Available</option>
+            )}
+          </select>
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-purple-400">
+            <ChevronDown size={14} />
+          </div>
+        </div>
+
+        {isOnnx && selectedObj && (
+          <div className="flex items-center gap-2">
+            {!status || status.status === 'idle' ? (
+              <button 
+                onClick={() => handleDownloadOnnx(selectedObj)}
+                className="p-2 bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 rounded-xl hover:bg-indigo-500/20 transition-all shadow-lg shadow-indigo-500/5 group"
+                title="Download for Edge Chat"
+              >
+                <CloudDownload size={16} className="group-hover:scale-110 transition-transform" />
+              </button>
+            ) : status.status === 'downloading' ? (
+              <div className="flex items-center gap-3 bg-[#1D152A] border border-indigo-500/30 px-3 py-1.5 rounded-xl min-w-[120px]">
+                <div className="flex-1 h-1 bg-indigo-500/10 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-indigo-500 transition-all duration-300" 
+                    style={{ width: `${status.progress}%` }} 
+                  />
+                </div>
+                <span className="text-[10px] font-bold text-indigo-400 font-mono">{status.progress}%</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400">
+                <Cpu size={14} />
+                <span className="text-[10px] font-bold uppercase tracking-widest">Edge Ready</span>
+              </div>
+            )}
+          </div>
         )}
-      </select>
-      <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-purple-400">
-        <ChevronDown size={14} />
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="flex flex-col h-full w-full bg-[#0B090F] relative overflow-hidden">

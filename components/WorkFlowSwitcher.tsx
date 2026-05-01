@@ -29,7 +29,7 @@ export const WorkFlowSwitcher: React.FC<WorkFlowSwitcherProps> = ({ active, onCh
         `}
       >
         <Box size={14} />
-        QUANTIZATION
+        GGUF
       </button>
       <button
         onClick={() => onChange('evaluate')}

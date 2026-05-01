@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, Body
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import subprocess
 import asyncio
@@ -31,10 +32,11 @@ MODELS_PARENT = os.path.join(BASE_DIR, "models")
 MODELS_DIR = os.path.join(MODELS_PARENT, "base_models") # HF Base Models
 GGUF_DIR = os.path.join(MODELS_PARENT, "gguf")          # Quantized Models
 ADAPTERS_DIR = os.path.join(MODELS_PARENT, "adapters")  # Fine-tuned Adapters
+ONNX_DIR = os.path.join(MODELS_PARENT, "onnx_export")    # ONNX Models
 DATASETS_DIR = os.path.join(BASE_DIR, "data", "datasets") 
 
 # Ensure necessary directories exist
-for d in [MODELS_PARENT, MODELS_DIR, GGUF_DIR, ADAPTERS_DIR, DATASETS_DIR]:
+for d in [MODELS_PARENT, MODELS_DIR, GGUF_DIR, ADAPTERS_DIR, ONNX_DIR, DATASETS_DIR]:
     if not os.path.exists(d):
         os.makedirs(d, exist_ok=True)
 
@@ -46,6 +48,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount ONNX models directory for browser downloads
+app.mount("/onnx_models", StaticFiles(directory=ONNX_DIR), name="onnx_models")
 
 class ExecuteRequest(BaseModel):
     code: str
@@ -318,6 +323,20 @@ async def list_native_models():
                         "source": "native", 
                         "type": "adapter",
                         "lora_slug": slug
+                    })
+
+    # 3. ONNX Models in server/models/onnx_export
+    if os.path.exists(ONNX_DIR):
+        for slug in os.listdir(ONNX_DIR):
+            onnx_path = os.path.join(ONNX_DIR, slug)
+            if os.path.isdir(onnx_path):
+                # Check for onnx files
+                if any(f.endswith(".onnx") for f in os.listdir(onnx_path)):
+                    results.append({
+                        "name": f"ONNX: {slug}",
+                        "source": "onnx",
+                        "type": "onnx",
+                        "onnx_slug": slug
                     })
                     
     return {"models": results}

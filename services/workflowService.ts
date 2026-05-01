@@ -7,10 +7,10 @@ export const generateOnnxExportScript = (adapterSlug: string, precision: string)
   return `import os
 import json
 import torch
+import shutil
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import PeftModel
 def run_onnx_production():
-    # Configuration
     adapter_slug = "${adapterSlug}"
     precision = "${precision}"
     adapters_root = r"d:\\Projects\\VML-Studio-Upgraded\\server\\models\\adapters"
@@ -19,58 +19,78 @@ def run_onnx_production():
     adapter_path = os.path.join(adapters_root, adapter_slug)
     config_path = os.path.join(adapter_path, "adapter_config.json")
     temp_merged_dir = os.path.join(export_root, f"temp_merged_{adapter_slug}")
-    onnx_output_dir = os.path.join(export_root, f"onnx_{adapter_slug}_{precision.lower()}")
+    onnx_raw_dir = os.path.join(export_root, f"onnx_{adapter_slug}_fp32_export")
+    onnx_final_dir = os.path.join(export_root, f"onnx_{adapter_slug}_{precision.lower()}_final")
     os.makedirs(temp_merged_dir, exist_ok=True)
-    os.makedirs(onnx_output_dir, exist_ok=True)
+    os.makedirs(onnx_raw_dir, exist_ok=True)
+    skip_phase_1 = os.path.exists(temp_merged_dir)
+    skip_phase_2 = os.path.exists(onnx_raw_dir) and precision != "FP16"
+    if skip_phase_1:
+        print(f"⏩ Found existing merged weights at {temp_merged_dir}. Skipping Phase 1.")
+    if skip_phase_2:
+        print(f"⏩ Found existing raw export at {onnx_raw_dir}. Skipping Phase 2.")
     print(f"🚀 Starting ONNX Production for: {adapter_slug} ({precision})")
-    # 1. Resolve Base Model
     try:
-        with open(config_path, 'r') as f:
-            config = json.load(f)
-            base_model_name = config.get("base_model_name_or_path")
-        print(f"📦 Base model requirement: {base_model_name}")
-        # Heuristic to find local path
-        base_model_folder = base_model_name.replace("/", "_")
-        base_model_path = os.path.join(base_models_root, base_model_folder)
-        if not os.path.exists(base_model_path):
-            raise Exception(f"Local base model not found at: {base_model_path}")
-        print(f"✅ Found local base model: {base_model_path}")
-        # 2. Merge Weights
-        print("--- Phase 1: Merging Weights ---")
-        base_model = AutoModelForCausalLM.from_pretrained(base_model_path, dtype=torch.float32, trust_remote_code=True)
-        model = PeftModel.from_pretrained(base_model, adapter_path)
-        merged_model = model.merge_and_unload()
-        merged_model.save_pretrained(temp_merged_dir, safe_serialization=False)
-        tokenizer = AutoTokenizer.from_pretrained(base_model_path, trust_remote_code=True)
-        tokenizer.save_pretrained(temp_merged_dir)
-        print("✅ Merging complete. Temporary model saved.")
-        # 3. ONNX Export
-        print(f"--- Phase 2: Exporting to ONNX ---")
-        export_flag = ""
-        if precision == "FP16":
-            export_flag = "--fp16"
-        # 1. Run standard export
-        cmd_export = f'optimum-cli export onnx --model {temp_merged_dir} {export_flag} --task text-generation-with-past {onnx_output_dir}'
-        print(f"Executing Export: {cmd_export}")
-        os.system(cmd_export)
-        # 2. Run Quantization if requested
-        final_path = onnx_output_dir
+        if not skip_phase_1:
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+                base_model_name = config.get("base_model_name_or_path")
+            print(f"📦 Base model requirement: {base_model_name}")
+            base_model_folder = base_model_name.replace("/", "_")
+            base_model_path = os.path.join(base_models_root, base_model_folder)
+            if not os.path.exists(base_model_path):
+                raise Exception(f"Local base model not found at: {base_model_path}")
+            print("--- Phase 1: Merging Weights ---")
+            base_model = AutoModelForCausalLM.from_pretrained(base_model_path, torch_dtype=torch.float32, trust_remote_code=True)
+            model = PeftModel.from_pretrained(base_model, adapter_path)
+            merged_model = model.merge_and_unload()
+            merged_model.save_pretrained(temp_merged_dir, safe_serialization=False)
+            tokenizer = AutoTokenizer.from_pretrained(base_model_path, trust_remote_code=True)
+            tokenizer.save_pretrained(temp_merged_dir)
+            print("✅ Merging complete.")
+        if not skip_phase_2:
+            print(f"--- Phase 2: Exporting to ONNX ---")
+            export_args = ""
+            target_export_dir = onnx_raw_dir
+            if precision == "FP16":
+                export_args = "--dtype fp16" 
+                target_export_dir = onnx_final_dir
+            cmd_export = f'optimum-cli export onnx --model {temp_merged_dir} --task text-generation-with-past {export_args} {target_export_dir}'
+            print(f"Executing Export: {cmd_export}")
+            ret = os.system(cmd_export)
+            if ret != 0:
+                raise Exception(f"Export failed with exit code {ret}")
+        final_path = onnx_raw_dir
         if precision == "INT8":
             print(f"--- Phase 3: Quantizing to INT8 ---")
-            quant_output = onnx_output_dir + "_int8"
-            cmd_quant = f'optimum-cli onnxruntime quantize --onnx_model {onnx_output_dir} -o {quant_output} --arm64' 
-            # Note: --arm64 or --avx512 depending on CPU, using a safe default or generic
+            cmd_quant = f'optimum-cli onnxruntime quantize --onnx_model {onnx_raw_dir} -o {onnx_final_dir} --arm64' 
             print(f"Executing Quantization: {cmd_quant}")
-            os.system(cmd_quant)
-            final_path = quant_output
-            print(f"✅ Quantization complete. Result at: {final_path}")
+            ret = os.system(cmd_quant)
+            if ret != 0:
+                raise Exception(f"Quantization failed with exit code {ret}")
+            final_path = onnx_final_dir
+        else:
+            if os.path.exists(onnx_raw_dir) and not os.path.exists(onnx_final_dir):
+                print(f"Moving {onnx_raw_dir} to {onnx_final_dir}")
+                shutil.move(onnx_raw_dir, onnx_final_dir)
+                final_path = onnx_final_dir
+            elif os.path.exists(onnx_final_dir):
+                final_path = onnx_final_dir
+        model_found = False
+        if final_path and os.path.exists(final_path):
+            for f in os.listdir(final_path):
+                if f.endswith(".onnx"):
+                    model_found = True
+                    break
+        if not model_found:
+            raise Exception(f"CRITICAL ERROR: No .onnx file found in {final_path}")
         print(f"🎉 MISSION ACCOMPLISHED! ONNX model ready at: {final_path}")
     except Exception as e:
         print(f"❌ Error during production: {e}")
         import traceback
         traceback.print_exc()
 
-
+# Blank line below is mandatory for Python REPL to close the 'def' block
 run_onnx_production()
 `;
 };
