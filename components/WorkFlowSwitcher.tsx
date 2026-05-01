@@ -2,8 +2,8 @@ import React from 'react';
 import { Cpu, Zap, Activity, Box, BarChart2 } from 'lucide-react';
 
 interface WorkFlowSwitcherProps {
-  active: 'quantize' | 'finetune' | 'evaluate';
-  onChange: (mode: 'quantize' | 'finetune' | 'evaluate') => void;
+  active: 'quantize' | 'finetune' | 'evaluate' | 'onnx';
+  onChange: (mode: 'quantize' | 'finetune' | 'evaluate' | 'onnx') => void;
 }
 
 export const WorkFlowSwitcher: React.FC<WorkFlowSwitcherProps> = ({ active, onChange }) => {
@@ -41,6 +41,17 @@ export const WorkFlowSwitcher: React.FC<WorkFlowSwitcherProps> = ({ active, onCh
       >
         <BarChart2 size={14} />
         EVALUATION
+      </button>
+      <button
+        onClick={() => onChange('onnx')}
+        className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-bold transition-all duration-300
+          ${active === 'onnx' 
+            ? 'bg-amber-500 text-black shadow-lg shadow-amber-900/20' 
+            : 'text-white/40 hover:text-white/60 hover:bg-white/5'}
+        `}
+      >
+        <Cpu size={14} />
+        ONNX
       </button>
     </div>
   );

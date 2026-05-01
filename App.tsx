@@ -33,6 +33,7 @@ import {
   fixCodeError,
   generateNotebookStructure,
 } from "./services/aiService";
+import { generateOnnxExportScript } from "./services/workflowService";
 import { VMLAgent } from "./services/vmlAgent";
 import { ThinkingView } from "./components/ThinkingView";
 import { ChatView } from "./components/ChatView";
@@ -40,6 +41,7 @@ import { WorkFlowSwitcher } from "./components/WorkFlowSwitcher";
 import { FineTuningPanel } from "./components/FineTuningPanel";
 import { QuantizationPanel } from "./components/QuantizationPanel";
 import { BenchmarkPanel } from "./components/BenchmarkPanel";
+import { OnnxPanel } from "./components/OnnxPanel";
 
 const API_BASE = "http://127.0.0.1:2000";
 
@@ -147,7 +149,7 @@ export default function App() {
   const [activeView, setActiveView] = useState<
     "studio" | "chat" | "workflow" | "knowledge"
   >("knowledge");
-  const [workflowMode, setWorkflowMode] = useState<"quantize" | "finetune" | "evaluate">(
+  const [workflowMode, setWorkflowMode] = useState<"quantize" | "finetune" | "evaluate" | "onnx">(
     "finetune",
   );
   const [isWorkflowExecuting, setIsWorkflowExecuting] = useState(false);
@@ -693,6 +695,47 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
     } finally {
       setIsWorkflowExecuting(false);
     }
+  };
+
+  const handleStartOnnx = async (adapterSlug: string, precision: string) => {
+    setIsWorkflowExecuting(true);
+    setActiveView("studio");
+
+    const code = generateOnnxExportScript(adapterSlug, precision);
+
+    const cellId = uuidv4();
+    const newCell: CellData = {
+      id: cellId,
+      type: "code",
+      content: code,
+      status: "running",
+    };
+
+    setCells((prev) => [...prev, newCell]);
+
+    const result = await executeCode(
+      code,
+      (partial) => {
+        setCells((prev) =>
+          prev.map((c) => (c.id === cellId ? { ...c, output: partial } : c)),
+        );
+      },
+      () => {},
+    );
+
+    setCells((prev) =>
+      prev.map((c) =>
+        c.id === cellId
+          ? {
+              ...c,
+              status: result.error ? "error" : "success",
+              output: result.error || result.text,
+            }
+          : c,
+      ),
+    );
+
+    setIsWorkflowExecuting(false);
   };
 
   const handleToggleConnector = (id: string) => {
@@ -1541,6 +1584,11 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
                     setChatSelectedModel(filename || workflowModelFilename);
                     setActiveView("chat");
                   }}
+                />
+              ) : workflowMode === "onnx" ? (
+                <OnnxPanel 
+                  onStart={handleStartOnnx}
+                  isExecuting={isWorkflowExecuting}
                 />
               ) : (
                 <BenchmarkPanel systemInfo={systemInfo} />
