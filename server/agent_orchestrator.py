@@ -152,6 +152,20 @@ async def handle_list_tools() -> list[types.Tool]:
                 },
                 "required": ["collection"],
             },
+        ),
+        types.Tool(
+            name="generate_image",
+            description="Generate an AI image using local Stable Diffusion via OpenVINO. Best for visuals and refinements.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "prompt": {"type": "string", "description": "High-quality descriptive prompt"},
+                    "mode": {"type": "string", "description": "Either 'text2img' or 'img2img'", "default": "text2img"},
+                    "strength": {"type": "number", "description": "Denoising strength (0.0-1.0) for img2img", "default": 0.6},
+                    "base_image_path": {"type": "string", "description": "Optional local path to a base image for refinement"}
+                },
+                "required": ["prompt"],
+            },
         )
     ]
 
@@ -667,6 +681,43 @@ print("🏁 VML Quantization Pipeline Complete.")
         }
         
         return [types.TextContent(type="text", text=f"[JSON_RESULTS]\n{json.dumps(specs, indent=2)}")]
+
+    elif name == "generate_image":
+        prompt = arguments.get("prompt")
+        mode = arguments.get("mode", "text2img")
+        strength = arguments.get("strength", 0.6)
+        base_image_path = arguments.get("base_image_path")
+        
+        try:
+            from image_service import image_service
+            import uuid
+            
+            # Resolve directory
+            cwd = os.getcwd()
+            base_path = cwd if os.path.basename(cwd) == "server" else os.path.join(cwd, "server")
+            gen_dir = os.path.join(base_path, "data", "generated")
+            os.makedirs(gen_dir, exist_ok=True)
+            
+            if mode == "img2img" and base_image_path:
+                # Resolve absolute path if needed
+                if not os.path.isabs(base_image_path):
+                    base_image_path = os.path.join(os.path.dirname(base_path), base_image_path)
+                
+                img = image_service.img2img(prompt, base_image_path, strength=strength)
+                prefix = "refine"
+            else:
+                img = image_service.generate(prompt)
+                prefix = "gen"
+            
+            filename = f"{prefix}_{uuid.uuid4().hex[:8]}.png"
+            save_path = os.path.join(gen_dir, filename)
+            img.save(save_path)
+            
+            # Return format that VibeML UI recognizes
+            return [types.TextContent(type="text", text=f"🎨 Image generated successfully!\n[IMAGE: {filename}]\nPath: {save_path}")]
+            
+        except Exception as e:
+            return [types.TextContent(type="text", text=f"❌ Image generation failed: {str(e)}")]
 
     raise ValueError(f"Unknown tool: {name}")
 

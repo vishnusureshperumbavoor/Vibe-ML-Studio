@@ -16,7 +16,15 @@ transformers
 datasets
 trl
 peft
+
+# VML Image Engine (OpenVINO)
+optimum[intel]
+openvino
+diffusers
 accelerate
+opencv-python
+pillow
+
 bitsandbytes
 sentencepiece
 huggingface_hub

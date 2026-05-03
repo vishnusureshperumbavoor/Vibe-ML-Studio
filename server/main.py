@@ -34,9 +34,10 @@ GGUF_DIR = os.path.join(MODELS_PARENT, "gguf")          # Quantized Models
 ADAPTERS_DIR = os.path.join(MODELS_PARENT, "adapters")  # Fine-tuned Adapters
 ONNX_DIR = os.path.join(MODELS_PARENT, "onnx_export")    # ONNX Models
 DATASETS_DIR = os.path.join(BASE_DIR, "data", "datasets") 
+GENERATED_IMAGES_DIR = os.path.join(BASE_DIR, "data", "generated")
 
 # Ensure necessary directories exist
-for d in [MODELS_PARENT, MODELS_DIR, GGUF_DIR, ADAPTERS_DIR, ONNX_DIR, DATASETS_DIR]:
+for d in [MODELS_PARENT, MODELS_DIR, GGUF_DIR, ADAPTERS_DIR, ONNX_DIR, DATASETS_DIR, GENERATED_IMAGES_DIR]:
     if not os.path.exists(d):
         os.makedirs(d, exist_ok=True)
 
@@ -69,6 +70,19 @@ class NativeChatRequest(BaseModel):
     model_filename: str
     messages: List[dict]
     lora_slug: Optional[str] = None
+
+class ImageGenerateRequest(BaseModel):
+    prompt: str
+    model_id: Optional[str] = "runwayml/stable-diffusion-v1-5"
+    steps: Optional[int] = 20
+    guidance: Optional[float] = 7.5
+
+class ImageImg2ImgRequest(BaseModel):
+    prompt: str
+    base64_image: str
+    strength: Optional[float] = 0.6
+    model_id: Optional[str] = "runwayml/stable-diffusion-v1-5"
+    steps: Optional[int] = 20
 
 from fastapi.responses import StreamingResponse
 import json
@@ -251,14 +265,60 @@ async def save_skill(req: FileWriteRequest):
 @app.get("/images/{filename}")
 async def get_image(filename: str):
     """
-    Serves a generated image file from the server/data directory.
+    Serves a generated image file from the server/data/generated directory.
     Usage: [IMAGE: slice.png] in stdout will be picked up by React.
     """
-    file_path = os.path.join(MODELS_DIR, filename)
+    # Check both generated and base_models for compatibility
+    gen_path = os.path.join(GENERATED_IMAGES_DIR, filename)
+    base_path = os.path.join(MODELS_DIR, filename)
+    
+    file_path = gen_path if os.path.exists(gen_path) else base_path
+    
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Image not found")
-    from fastapi.responses import FileResponse
+    
     return FileResponse(file_path)
+
+# --- Image Generation Endpoints ---
+from image_service import image_service
+import base64
+from io import BytesIO
+from PIL import Image
+import uuid
+
+@app.post("/image/generate")
+async def generate_image(req: ImageGenerateRequest):
+    try:
+        # Run in executor to avoid blocking FastAPI
+        loop = asyncio.get_event_loop()
+        img = await loop.run_in_executor(None, image_service.generate, req.prompt, req.model_id, req.steps, req.guidance)
+        
+        filename = f"gen_{uuid.uuid4().hex[:8]}.png"
+        save_path = os.path.join(GENERATED_IMAGES_DIR, filename)
+        img.save(save_path)
+        
+        return {"filename": filename, "url": f"/images/{filename}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/image/img2img")
+async def img2img(req: ImageImg2ImgRequest):
+    try:
+        # Decode base64 image
+        header, encoded = req.base64_image.split(",", 1) if "," in req.base64_image else (None, req.base64_image)
+        img_data = base64.b64decode(encoded)
+        init_image = Image.open(BytesIO(img_data)).convert("RGB")
+        
+        loop = asyncio.get_event_loop()
+        img = await loop.run_in_executor(None, image_service.img2img, req.prompt, init_image, req.strength, req.model_id, req.steps)
+        
+        filename = f"refine_{uuid.uuid4().hex[:8]}.png"
+        save_path = os.path.join(GENERATED_IMAGES_DIR, filename)
+        img.save(save_path)
+        
+        return {"filename": filename, "url": f"/images/{filename}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/v1/native/chat")
