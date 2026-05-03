@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Body
+from fastapi import FastAPI, HTTPException, Body, Form, UploadFile, File
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -285,13 +285,20 @@ import base64
 from io import BytesIO
 from PIL import Image
 import uuid
+from fastapi import Form, UploadFile, File
+import tempfile
 
 @app.post("/image/generate")
-async def generate_image(req: ImageGenerateRequest):
+async def generate_image(
+    prompt: str = Form(...),
+    model_id: Optional[str] = Form("runwayml/stable-diffusion-v1-5"),
+    steps: Optional[int] = Form(20),
+    guidance_scale: Optional[float] = Form(7.5)
+):
     try:
         # Run in executor to avoid blocking FastAPI
         loop = asyncio.get_event_loop()
-        img = await loop.run_in_executor(None, image_service.generate, req.prompt, req.model_id, req.steps, req.guidance)
+        img = await loop.run_in_executor(None, image_service.generate, prompt, model_id, int(steps), float(guidance_scale))
         
         filename = f"gen_{uuid.uuid4().hex[:8]}.png"
         save_path = os.path.join(GENERATED_IMAGES_DIR, filename)
@@ -299,25 +306,43 @@ async def generate_image(req: ImageGenerateRequest):
         
         return {"filename": filename, "url": f"/images/{filename}"}
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/image/img2img")
-async def img2img(req: ImageImg2ImgRequest):
+async def img2img(
+    prompt: str = Form(...),
+    image: UploadFile = File(...),
+    strength: Optional[float] = Form(0.6),
+    model_id: Optional[str] = Form("runwayml/stable-diffusion-v1-5"),
+    steps: Optional[int] = Form(20)
+):
     try:
-        # Decode base64 image
-        header, encoded = req.base64_image.split(",", 1) if "," in req.base64_image else (None, req.base64_image)
-        img_data = base64.b64decode(encoded)
-        init_image = Image.open(BytesIO(img_data)).convert("RGB")
+        # Read the uploaded file
+        contents = await image.read()
+        pil_image = Image.open(BytesIO(contents)).convert("RGB")
         
+        # Save temp file for the service
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            pil_image.save(tmp.name)
+            tmp_path = tmp.name
+
         loop = asyncio.get_event_loop()
-        img = await loop.run_in_executor(None, image_service.img2img, req.prompt, init_image, req.strength, req.model_id, req.steps)
+        img = await loop.run_in_executor(None, image_service.img2img, prompt, tmp_path, model_id, int(steps), float(strength))
         
+        # Cleanup
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
         filename = f"refine_{uuid.uuid4().hex[:8]}.png"
         save_path = os.path.join(GENERATED_IMAGES_DIR, filename)
         img.save(save_path)
         
         return {"filename": filename, "url": f"/images/{filename}"}
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 

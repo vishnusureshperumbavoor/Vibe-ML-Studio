@@ -42,6 +42,7 @@ import { FineTuningPanel } from "./components/FineTuningPanel";
 import { QuantizationPanel } from "./components/QuantizationPanel";
 import { BenchmarkPanel } from "./components/BenchmarkPanel";
 import { OnnxPanel } from "./components/OnnxPanel";
+import { CreativeStudio } from "./components/CreativeStudio";
 
 const API_BASE = "http://127.0.0.1:2000";
 
@@ -147,8 +148,8 @@ export default function App() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [activeView, setActiveView] = useState<
-    "studio" | "chat" | "workflow" | "knowledge"
-  >("knowledge");
+    "studio" | "chat" | "workflow" | "knowledge" | "creative"
+  >("chat");
   const [workflowMode, setWorkflowMode] = useState<"quantize" | "finetune" | "evaluate" | "onnx">(
     "finetune",
   );
@@ -158,6 +159,7 @@ export default function App() {
     string | null
   >(null);
   const [systemInfo, setSystemInfo] = useState<any>(null);
+  const [lastGeneratedImage, setLastGeneratedImage] = useState<string | undefined>(undefined);
   const [chatSelectedModel, setChatSelectedModel] = useState<string>("");
   const [preSelectedDataset, setPreSelectedDataset] = useState<string | null>(
     null,
@@ -764,6 +766,35 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
           : connector,
       ),
     );
+  };
+
+  const handleStartGeneration = async (params: { prompt: string; mode: string; strength: number; guidance_scale: number; base_image?: File }) => {
+    setIsGenerating(true);
+    try {
+      const formData = new FormData();
+      formData.append('prompt', params.prompt);
+      formData.append('strength', params.strength.toString());
+      formData.append('guidance_scale', params.guidance_scale.toString());
+      
+      if (params.mode === 'img2img' && params.base_image) {
+        formData.append('image', params.base_image);
+      }
+
+      const endpoint = params.mode === 'img2img' ? '/image/img2img' : '/image/generate';
+      const resp = await fetch(`${API_BASE}${endpoint}`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await resp.json();
+      if (data.filename) {
+        setLastGeneratedImage(data.filename);
+      }
+    } catch (e) {
+      console.error("Generation failed:", e);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleTestConnector = async (id: string) => {
@@ -1507,6 +1538,19 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
               <MessageSquare size={16} />
               <span className="text-xs font-semibold">Arena</span>
             </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setActiveView("creative")}
+              className={`gap-2 h-10 px-4 rounded-xl transition-all duration-300 border ${
+                activeView === "creative"
+                  ? "bg-purple-500/20 text-purple-200 border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.15)]"
+                  : "text-gray-400 border-transparent hover:bg-white/5"
+              }`}
+            >
+              <Sparkles size={16} />
+              <span className="text-xs font-semibold">Creative</span>
+            </Button>
           </div>
 
           {isAutoRunning && (
@@ -1543,6 +1587,12 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
             setDistillStatus={setDistillStatus}
             showDistillUI={showDistillUI}
             setShowDistillUI={setShowDistillUI}
+          />
+        ) : activeView === "creative" ? (
+          <CreativeStudio 
+            onGenerate={handleStartGeneration} 
+            isGenerating={isGenerating} 
+            lastGeneratedImage={lastGeneratedImage}
           />
         ) : activeView === "workflow" ? (
           <div className="flex-1 flex flex-col bg-[#0B090F] overflow-y-auto p-8 items-center space-y-12">

@@ -32,14 +32,37 @@ class ImageGenerationService:
         
         pipe_class = OVStableDiffusionImg2ImgPipeline if is_img2img else OVStableDiffusionPipeline
         
+        # Determine local model path
+        model_name = model_id.split("/")[-1]
+        type_suffix = "img2img" if is_img2img else "txt2img"
+        local_model_path = os.path.join(self.models_dir, f"{model_name}_{type_suffix}")
+        
         # Load the model
-        # Note: export=True converts the model to OpenVINO IR on the first run
-        self.pipeline = pipe_class.from_pretrained(
-            model_id,
-            export=True,
-            device=self.device,
-            compile=True
-        )
+        if not os.path.exists(local_model_path):
+            print(f"🔄 Exporting {model_id} to local storage: {local_model_path}")
+            self.pipeline = pipe_class.from_pretrained(
+                model_id,
+                export=True,
+                device=self.device,
+                compile=True,
+                safety_checker=None
+            )
+            # Save for future use to save disk/time
+            self.pipeline.save_pretrained(local_model_path)
+            print(f"✅ Model exported to {local_model_path}")
+        else:
+            print(f"🚀 Loading optimized model from: {local_model_path}")
+            self.pipeline = pipe_class.from_pretrained(
+                local_model_path,
+                device=self.device,
+                compile=True,
+                safety_checker=None
+            )
+        
+        # Explicitly disable the safety checker to allow artistic content
+        def dummy(images, **kwargs):
+            return images, [False] * len(images)
+        self.pipeline.safety_checker = dummy
         
         # Apply LCM scheduler if it's an LCM model for 4-step generation
         if "lcm" in model_id.lower():

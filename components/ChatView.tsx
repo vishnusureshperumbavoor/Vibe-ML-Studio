@@ -1,6 +1,7 @@
 import { MessageSquare, Send, User, Bot, ChevronDown, Trash2, Loader2, Sparkles, Square, Columns, Maximize2, Activity, Clock, Zap, Search, X, Database, FileText, Plus, CheckCircle2, Copy, CloudDownload, DownloadCloud, CheckCircle, Cpu } from 'lucide-react';
 import { onnxService } from '../services/onnxInferenceService';
 import { Button } from './Button';
+import { RenderedImage } from './RenderedImage';
 import { useEffect, useRef, useState } from 'react';
 
 interface Message {
@@ -110,7 +111,17 @@ const renderMessageList = (messages: Message[], isSending: boolean, scrollRef: a
                       )}
 
                       <div className="leading-relaxed whitespace-pre-wrap text-left relative">
-                        {finalContent || (thought ? "" : msg.content)}
+                        {(() => {
+                          const content = finalContent || (thought ? "" : msg.content);
+                          const parts = content.split(/(\[IMAGE: [^\]]+\])/g);
+                          return parts.map((part, i) => {
+                            if (part.startsWith('[IMAGE: ') && part.endsWith(']')) {
+                              const filename = part.slice(8, -1).trim();
+                              return <RenderedImage key={i} source={filename} />;
+                            }
+                            return part;
+                          });
+                        })()}
                         {isAssistant && isLast && isSending && (
                           <span className="inline-block w-1.5 h-4 ml-1 bg-purple-500/50 animate-pulse rounded-full align-middle" />
                         )}
