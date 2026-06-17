@@ -8,7 +8,6 @@ requests
 
 # VML Inference Engine (Native GGUF)
 llama-cpp-python
-diskcache
 
 # VML SFT Pipeline (Fine-Tuning)
 torch>=2.2.0
@@ -21,12 +20,8 @@ peft
 optimum[intel]
 openvino
 diffusers
-accelerate
-opencv-python
 pillow
 
-bitsandbytes
-sentencepiece
 huggingface_hub
 
 # VML MCP Protocol
@@ -42,4 +37,3 @@ lxml
 # Utilities
 numpy
 optimum[onnxruntime]
-onnx

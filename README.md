@@ -1,14 +1,15 @@
 ## Frontend
+
 npm install  
 npm run dev
 
 ## Backend
+
 cd server  
-python -m venv venv  
-.\venv\Scripts\Activate.ps1  
-pip install -r requirements.txt  
-python main.py
+bash start.sh # Linux/Mac
+start.bat # Windows
 
 ## MCP Bridge
-cd mcp-bridge   
+
+cd mcp-bridge  
 node index.mjs
