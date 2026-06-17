@@ -1,9 +1,18 @@
 import os
 import torch
-from optimum.intel import OVStableDiffusionPipeline, OVStableDiffusionImg2ImgPipeline
-from diffusers import LCMScheduler
 from PIL import Image
 import time
+
+_IMAGE_BACKEND_IMPORT_ERROR = None
+
+try:
+    from optimum.intel import OVStableDiffusionPipeline, OVStableDiffusionImg2ImgPipeline
+    from diffusers import LCMScheduler
+except Exception as exc:
+    OVStableDiffusionPipeline = None
+    OVStableDiffusionImg2ImgPipeline = None
+    LCMScheduler = None
+    _IMAGE_BACKEND_IMPORT_ERROR = exc
 
 class ImageGenerationService:
     def __init__(self, models_dir="models/openvino"):
@@ -18,6 +27,11 @@ class ImageGenerationService:
 
     def _load_model(self, model_id, is_img2img=False):
         """Loads or switches the model in memory."""
+        if _IMAGE_BACKEND_IMPORT_ERROR is not None:
+            raise RuntimeError(
+                "Image backend failed to initialize. Check Optimum/OpenVINO/torch package compatibility."
+            ) from _IMAGE_BACKEND_IMPORT_ERROR
+
         if self.current_model_id == model_id and self.pipeline is not None:
             # Check if we need to switch from txt2img to img2img
             if is_img2img and not isinstance(self.pipeline, OVStableDiffusionImg2ImgPipeline):

@@ -11,15 +11,15 @@ llama-cpp-python
 
 # VML SFT Pipeline (Fine-Tuning)
 torch>=2.2.0
-transformers
+transformers==4.53.3
 datasets
-trl
-peft
+trl==0.19.1
+peft>=0.17.1,<1.0
 
 # VML Image Engine (OpenVINO)
-optimum[intel]
+optimum-intel[openvino]==1.25.2
 openvino
-diffusers
+diffusers==0.35.1
 pillow
 
 huggingface_hub
@@ -29,11 +29,11 @@ mcp
 
 # VML RAG Pipeline (Intelligence Engine)
 chromadb
-sentence-transformers
+sentence-transformers==5.1.1
 pymupdf
 beautifulsoup4
 lxml
 
 # Utilities
 numpy
-optimum[onnxruntime]
+optimum[onnxruntime]==1.27.0

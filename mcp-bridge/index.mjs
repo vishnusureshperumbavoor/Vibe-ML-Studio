@@ -2,11 +2,19 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
+import os from 'os';
+import { existsSync } from 'fs';
+import { fileURLToPath } from 'url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const PROJECT_ROOT = path.resolve(__dirname, '..');
+const SERVER_ROOT = path.join(PROJECT_ROOT, 'server');
+
 // Load environment variables
-dotenv.config({ path: '../.env' });
+dotenv.config({ path: path.join(PROJECT_ROOT, '.env') });
 
 const app = express();
 app.use(cors());
@@ -19,9 +27,15 @@ let mcpClient = null;
 async function initMCP() {
     console.log("🚀 Connecting to Vibe ML MCP Server...");
     
-    // We launch the Python executable, and pass your agent_orchestrator.py as the argument!
-    const pythonExec = path.resolve('../server/venv/Scripts/python.exe');
-    const pythonScript = path.resolve('../server/agent_orchestrator.py');
+    // Resolve Python executable across Windows/macOS/Linux.
+    const platform = os.platform();
+    const venvPython = platform === 'win32'
+        ? path.join(SERVER_ROOT, 'venv', 'Scripts', 'python.exe')
+        : path.join(SERVER_ROOT, 'venv', 'bin', 'python');
+    const pythonExec = existsSync(venvPython)
+        ? venvPython
+        : (platform === 'win32' ? 'python' : 'python3');
+    const pythonScript = path.join(SERVER_ROOT, 'agent_orchestrator.py');
 
     const transport = new StdioClientTransport({
         command: pythonExec,
