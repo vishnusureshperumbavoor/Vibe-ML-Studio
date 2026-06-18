@@ -8,6 +8,8 @@ import asyncio
 import os
 import tempfile
 import sys
+import re
+import time
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 from inference import native_manager
@@ -34,10 +36,11 @@ GGUF_DIR = os.path.join(MODELS_PARENT, "gguf")          # Quantized Models
 ADAPTERS_DIR = os.path.join(MODELS_PARENT, "adapters")  # Fine-tuned Adapters
 ONNX_DIR = os.path.join(MODELS_PARENT, "onnx_export")    # ONNX Models
 DATASETS_DIR = os.path.join(BASE_DIR, "data", "datasets") 
+TEXT_SOURCES_DIR = os.path.join(BASE_DIR, "data", "text_sources")
 GENERATED_IMAGES_DIR = os.path.join(BASE_DIR, "data", "generated")
 
 # Ensure necessary directories exist
-for d in [MODELS_PARENT, MODELS_DIR, GGUF_DIR, ADAPTERS_DIR, ONNX_DIR, DATASETS_DIR, GENERATED_IMAGES_DIR]:
+for d in [MODELS_PARENT, MODELS_DIR, GGUF_DIR, ADAPTERS_DIR, ONNX_DIR, DATASETS_DIR, TEXT_SOURCES_DIR, GENERATED_IMAGES_DIR]:
     if not os.path.exists(d):
         os.makedirs(d, exist_ok=True)
 
@@ -520,6 +523,20 @@ class DistillRequest(BaseModel):
     auto_deploy: bool = False
     persona: Optional[str] = None
 
+class TextDistillRequest(BaseModel):
+    raw_text: str
+    dataset_name: Optional[str] = None
+    auto_deploy: bool = False
+    persona: Optional[str] = None
+
+class TextSourceRequest(BaseModel):
+    name: Optional[str] = None
+    raw_text: str
+
+def _safe_slug(name: str, fallback: str = "pasted_text") -> str:
+    slug = re.sub(r"[^a-zA-Z0-9_-]+", "_", (name or fallback).strip()).strip("_").lower()
+    return slug or fallback
+
 @app.post("/distill/start")
 async def start_distillation(req: DistillRequest):
     """Triggers the distillation process in a background task."""
@@ -529,6 +546,91 @@ async def start_distillation(req: DistillRequest):
     # We run it in the background with the autonomous flag
     asyncio.create_task(distiller.distill_collection(req.collection_name, auto_deploy=req.auto_deploy, persona=req.persona))
     return {"status": "started", "collection": req.collection_name, "auto_deploy": req.auto_deploy, "persona": req.persona}
+
+@app.post("/distill/text")
+async def start_text_distillation(req: TextDistillRequest):
+    """Creates an Alpaca JSONL dataset directly from pasted text without RAG/vector indexing."""
+    if distiller.status["step"] != "idle" and distiller.status["step"] != "complete" and distiller.status["step"] != "error":
+        raise HTTPException(status_code=400, detail="A distillation task is already running.")
+
+    dataset_name = req.dataset_name or "pasted_text"
+    asyncio.create_task(
+        distiller.distill_text(
+            req.raw_text,
+            dataset_name=dataset_name,
+            auto_deploy=req.auto_deploy,
+            persona=req.persona or "Generic",
+        )
+    )
+    return {"status": "started", "dataset_name": dataset_name, "auto_deploy": req.auto_deploy, "persona": req.persona or "Generic"}
+
+@app.post("/text_sources")
+async def save_text_source(req: TextSourceRequest):
+    """Stores pasted text as a reusable source without vector/RAG indexing."""
+    raw_text = (req.raw_text or "").strip()
+    if not raw_text:
+        raise HTTPException(status_code=400, detail="No pasted text provided.")
+
+    slug = _safe_slug(req.name or "pasted_text")
+    source_id = f"{slug}_{int(time.time())}"
+    text_path = os.path.join(TEXT_SOURCES_DIR, f"{source_id}.txt")
+    meta_path = os.path.join(TEXT_SOURCES_DIR, f"{source_id}.json")
+
+    with open(text_path, "w", encoding="utf-8") as f:
+        f.write(raw_text)
+    with open(meta_path, "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "id": source_id,
+                "display_name": req.name or "Pasted Text",
+                "chars": len(raw_text),
+                "created_at": time.time(),
+            },
+            f,
+        )
+
+    return {"status": "saved", "source": {"id": source_id, "display_name": req.name or "Pasted Text", "chars": len(raw_text)}}
+
+@app.get("/text_sources")
+async def list_text_sources():
+    """Lists pasted text sources saved for later Alpaca distillation."""
+    sources = []
+    if not os.path.exists(TEXT_SOURCES_DIR):
+        return {"sources": []}
+
+    for f in os.listdir(TEXT_SOURCES_DIR):
+        if not f.endswith(".json"):
+            continue
+        meta_path = os.path.join(TEXT_SOURCES_DIR, f)
+        try:
+            with open(meta_path, "r", encoding="utf-8") as mf:
+                meta = json.load(mf)
+            text_path = os.path.join(TEXT_SOURCES_DIR, f.replace(".json", ".txt"))
+            meta["size_kb"] = os.path.getsize(text_path) // 1024 if os.path.exists(text_path) else 0
+            sources.append(meta)
+        except Exception:
+            continue
+    return {"sources": sorted(sources, key=lambda item: item.get("created_at", 0), reverse=True)}
+
+@app.get("/text_sources/{source_id}")
+async def get_text_source(source_id: str):
+    """Fetches a saved pasted text source."""
+    safe_id = _safe_slug(source_id)
+    text_path = os.path.join(TEXT_SOURCES_DIR, f"{safe_id}.txt")
+    meta_path = os.path.join(TEXT_SOURCES_DIR, f"{safe_id}.json")
+    if not os.path.exists(text_path):
+        raise HTTPException(status_code=404, detail="Text source not found.")
+
+    with open(text_path, "r", encoding="utf-8") as f:
+        raw_text = f.read()
+    meta = {"id": safe_id, "display_name": safe_id, "chars": len(raw_text)}
+    if os.path.exists(meta_path):
+        try:
+            with open(meta_path, "r", encoding="utf-8") as mf:
+                meta.update(json.load(mf))
+        except Exception:
+            pass
+    return {"source": meta, "raw_text": raw_text}
 
 @app.get("/distill/status")
 async def get_distill_status():

@@ -3,6 +3,7 @@ import json
 import requests
 import time
 import asyncio
+import re
 from typing import List, Dict, Any
 from rag_service import knowledge_manager
 from dataset_uploader import upload_dataset_to_hf
@@ -78,6 +79,94 @@ class VMLDistiller:
         except Exception as e:
             print(f"Error distilling chunk: {e}")
             return []
+
+    def split_plain_text(self, text: str, chunk_size: int = 2500, chunk_overlap: int = 200) -> List[str]:
+        """Split pasted text for dataset distillation without touching the vector/RAG pipeline."""
+        clean_text = (text or "").strip()
+        if not clean_text:
+            return []
+
+        chunks = []
+        start = 0
+        while start < len(clean_text):
+            end = min(len(clean_text), start + chunk_size)
+            if end < len(clean_text):
+                boundary = max(
+                    clean_text.rfind("\n\n", start, end),
+                    clean_text.rfind(". ", start, end),
+                    clean_text.rfind("\n", start, end),
+                )
+                if boundary > start + chunk_size // 2:
+                    end = boundary + 1
+            chunks.append(clean_text[start:end].strip())
+            if end >= len(clean_text):
+                start = end
+            else:
+                start = max(end - chunk_overlap, start + 1)
+        return [chunk for chunk in chunks if chunk]
+
+    async def distill_text(self, raw_text: str, dataset_name: str, auto_deploy: bool = False, persona: str = "Generic"):
+        """Create an Alpaca JSONL dataset directly from pasted text, bypassing Chroma/RAG."""
+        try:
+            self.api_key = os.getenv("VITE_KIMI_API_KEY") or os.getenv("KIMI_API_KEY")
+            if not self.api_key:
+                self.update_status("error", 0, "Missing KIMI_API_KEY. Add it to .env or Settings.")
+                return None
+
+            chunks = self.split_plain_text(raw_text)
+            if not chunks:
+                self.update_status("error", 0, "No pasted text provided.")
+                return None
+
+            safe_name = re.sub(r"[^a-zA-Z0-9_-]+", "_", (dataset_name or "pasted_text").strip()).strip("_").lower()
+            if not safe_name:
+                safe_name = "pasted_text"
+
+            self.update_status("distilling", 10, f"Creating Alpaca dataset from pasted text: {safe_name}")
+            dataset = []
+            total_chunks = len(chunks)
+            for i, chunk in enumerate(chunks):
+                progress = 10 + int((i / total_chunks) * 70)
+                self.update_status("distilling", progress, f"Synthesizing pasted text chunk {i + 1}/{total_chunks} as {persona}")
+                dataset.extend(self.generate_alpaca_pairs(chunk, persona=persona))
+                await asyncio.sleep(0.5)
+
+            if not dataset:
+                self.update_status("error", 0, "No Alpaca pairs were generated from the pasted text.")
+                return None
+
+            self.update_status("saving", 85, "Saving Alpaca JSONL dataset...")
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            dataset_dir = os.path.join(base_dir, "data", "datasets")
+            os.makedirs(dataset_dir, exist_ok=True)
+
+            persona_slug = (persona or "generic").lower().replace(" ", "_").replace("&", "n")
+            filename = f"{safe_name}_{persona_slug}_{int(time.time())}.jsonl"
+            filepath = os.path.join(dataset_dir, filename)
+
+            with open(filepath, "w", encoding="utf-8") as f:
+                for item in dataset:
+                    f.write(json.dumps(item, ensure_ascii=False) + "\n")
+
+            if auto_deploy:
+                self.update_status("deploying", 92, "Uploading pasted-text dataset to Hugging Face...")
+                result = upload_dataset_to_hf(filepath, safe_name, safe_name)
+                if "error" in result:
+                    self.update_status("error", 0, f"Handover Failed: {result['error']}")
+                else:
+                    self.update_status("complete", 100, f"Mission Accomplished! Published to: {result['url']}")
+                    try:
+                        with open(filepath + ".meta", "w", encoding="utf-8") as mf:
+                            json.dump({"hf_url": result["url"], "collection": safe_name, "timestamp": time.time()}, mf)
+                    except Exception:
+                        pass
+            else:
+                self.update_status("complete", 100, f"Alpaca dataset saved as {filename}")
+
+            return filepath
+        except Exception as e:
+            self.update_status("error", 0, f"Text Distillation Error: {str(e)}")
+            return None
 
     async def distill_collection(self, collection_name: str, auto_deploy: bool = True, persona: str = "Standard Expert"):
         """Standard distillation pipeline: Fetch -> Distill -> Save -> [Auto-Deploy]."""

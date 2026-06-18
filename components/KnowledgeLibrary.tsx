@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Database, 
-  Plus, 
-  Globe, 
-  FileText, 
+import React, { useState, useEffect } from "react";
+import {
+  Database,
+  Plus,
+  Globe,
+  FileText,
   ChevronRight,
   Loader2,
   CheckCircle2,
@@ -14,20 +14,33 @@ import {
   Share2,
   ExternalLink,
   Activity,
-  Brain
-} from 'lucide-react';
-import { Button } from './Button';
+  Brain,
+} from "lucide-react";
+import { Button } from "./Button";
 
-export function KnowledgeLibrary({ onDistillComplete, distillStatus, setDistillStatus, showDistillUI, setShowDistillUI }: { 
-  onDistillComplete?: (datasetId: string) => void,
-  distillStatus: any,
-  setDistillStatus: (s: any) => void,
-  showDistillUI: boolean,
-  setShowDistillUI: (v: boolean) => void
+export function KnowledgeLibrary({
+  onDistillComplete,
+  distillStatus,
+  setDistillStatus,
+  showDistillUI,
+  setShowDistillUI,
+}: {
+  onDistillComplete?: (datasetId: string) => void;
+  distillStatus: any;
+  setDistillStatus: (s: any) => void;
+  showDistillUI: boolean;
+  setShowDistillUI: (v: boolean) => void;
 }) {
   const [collections, setCollections] = useState<any[]>([]);
   const [totalStorage, setTotalStorage] = useState<number>(0);
-  const [selectedCollection, setSelectedCollection] = useState<string | null>(null);
+  const [selectedCollection, setSelectedCollection] = useState<string | null>(
+    null,
+  );
+  const [selectedDataset, setSelectedDataset] = useState<string | null>(null);
+  const [textSources, setTextSources] = useState<any[]>([]);
+  const [selectedTextSource, setSelectedTextSource] = useState<any | null>(null);
+  const [selectedTextContent, setSelectedTextContent] = useState("");
+  const [isLoadingTextSource, setIsLoadingTextSource] = useState(false);
   const [collectionData, setCollectionData] = useState<any[]>([]);
   const [isExploring, setIsExploring] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -42,33 +55,63 @@ export function KnowledgeLibrary({ onDistillComplete, distillStatus, setDistillS
   const [isMining, setIsMining] = useState(false);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [miningStep, setMiningStep] = useState<number>(0);
-  const [statusMsg, setStatusMsg] = useState<{ text: string, type: 'success' | 'error' | 'info' } | null>(null);
+  const [statusMsg, setStatusMsg] = useState<{
+    text: string;
+    type: "success" | "error" | "info";
+  } | null>(null);
   const [sourceHistory, setSourceHistory] = useState<string[]>([]);
-  const [sourceInput, setSourceInput] = useState('');
-  const [newCollectionName, setNewCollectionName] = useState('');
+  const [sourceInput, setSourceInput] = useState("");
+  const [sourceType, setSourceType] = useState<"path_or_url" | "text">(
+    "path_or_url",
+  );
+  const [newCollectionName, setNewCollectionName] = useState("");
   const newNameRef = React.useRef<HTMLInputElement>(null);
   const [localDatasets, setLocalDatasets] = useState<any[]>([]);
   // Persistent state now passed as props
-  const [distillPersona, setDistillPersona] = useState('Generic');
-
+  const [distillPersona, setDistillPersona] = useState("Generic");
 
   const fetchLocalDatasets = async () => {
     try {
       const resp = await fetch("http://127.0.0.1:2000/list_local_datasets");
+        const data = await resp.json();
+        setLocalDatasets(data.datasets || []);
+        if (
+          selectedDataset &&
+          !data.datasets?.some((ds: any) => ds.id === selectedDataset)
+        ) {
+          setSelectedDataset(null);
+        }
+      } catch (e) {
+        console.error("Failed to fetch local datasets:", e);
+      }
+  };
+
+  const fetchTextSources = async () => {
+    try {
+      const resp = await fetch("http://127.0.0.1:2000/text_sources");
       const data = await resp.json();
-      setLocalDatasets(data.datasets || []);
+      setTextSources(data.sources || []);
+      if (
+        selectedTextSource &&
+        !data.sources?.some((source: any) => source.id === selectedTextSource.id)
+      ) {
+        setSelectedTextSource(null);
+      }
     } catch (e) {
-      console.error("Failed to fetch local datasets:", e);
+      console.error("Failed to fetch text sources:", e);
     }
   };
 
   const fetchCollections = async () => {
     setIsLoading(true);
     try {
-      const resp = await fetch("http://127.0.0.1:1001/mcp/call", {
+      const resp = await fetch("http://127.0.0.1:3001/mcp/call", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "list_knowledge_collections", arguments: {} })
+        body: JSON.stringify({
+          name: "list_knowledge_collections",
+          arguments: {},
+        }),
       });
       const data = await resp.json();
       const text = data[0]?.text || data.result?.[0]?.text || "";
@@ -88,13 +131,14 @@ export function KnowledgeLibrary({ onDistillComplete, distillStatus, setDistillS
   useEffect(() => {
     fetchCollections();
     fetchLocalDatasets();
-    
+    fetchTextSources();
+
     // Check if distillation is already running in background
     const checkStatus = async () => {
       try {
         const resp = await fetch("http://127.0.0.1:2000/distill/status");
         const status = await resp.json();
-        if (status.step !== 'idle') {
+        if (status.step !== "idle") {
           setDistillStatus(status);
           setShowDistillUI(true);
         }
@@ -104,7 +148,7 @@ export function KnowledgeLibrary({ onDistillComplete, distillStatus, setDistillS
     };
     checkStatus();
 
-    const history = localStorage.getItem('vml_source_history');
+    const history = localStorage.getItem("vml_source_history");
     if (history) setSourceHistory(JSON.parse(history));
   }, []);
 
@@ -113,20 +157,21 @@ export function KnowledgeLibrary({ onDistillComplete, distillStatus, setDistillS
       setCollectionData([]);
       return;
     }
-    
+
     const fetchExplorerData = async () => {
       setIsExploring(true);
       try {
-        const resp = await fetch("http://127.0.0.1:1001/mcp/call", {
+        const resp = await fetch("http://127.0.0.1:3001/mcp/call", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            name: "explore_knowledge_collection", 
-            arguments: { collection: selectedCollection, limit: 50 } 
-          })
+          body: JSON.stringify({
+            name: "explore_knowledge_collection",
+            arguments: { collection: selectedCollection, limit: 50 },
+          }),
         });
         const data = await resp.json();
-        const text = data.error || data[0]?.text || data.result?.[0]?.text || "";
+        const text =
+          data.error || data[0]?.text || data.result?.[0]?.text || "";
         if (text.includes("[JSON_RESULTS]")) {
           const jsonStr = text.split("[JSON_RESULTS]")[1].trim();
           const results = JSON.parse(jsonStr);
@@ -146,46 +191,87 @@ export function KnowledgeLibrary({ onDistillComplete, distillStatus, setDistillS
     fetchLocalDatasets(); // RE-FETCH on selection
   }, [selectedCollection]);
 
+  useEffect(() => {
+    if (!selectedTextSource?.id) {
+      setSelectedTextContent("");
+      return;
+    }
+
+    const fetchTextSource = async () => {
+      setIsLoadingTextSource(true);
+      try {
+        const resp = await fetch(
+          `http://127.0.0.1:2000/text_sources/${selectedTextSource.id}`,
+        );
+        const data = await resp.json();
+        if (!resp.ok) {
+          throw new Error(data.detail || "Failed to load pasted text.");
+        }
+        setSelectedTextContent(data.raw_text || "");
+      } catch (e) {
+        console.error("Failed to load pasted text:", e);
+        setSelectedTextContent("");
+      } finally {
+        setIsLoadingTextSource(false);
+      }
+    };
+
+    fetchTextSource();
+  }, [selectedTextSource?.id]);
 
   const handleStartDistillation = async (isAgentic: boolean = false) => {
     if (!selectedCollection) return;
-    setDistillStatus({ 
-      step: 'init', 
-      progress: 5, 
-      current_task: isAgentic ? 'Initiating Autonomous Agent Mission...' : 'Starting manual distillation...' 
+    setDistillStatus({
+      step: "init",
+      progress: 5,
+      current_task: isAgentic
+        ? "Initiating Autonomous Agent Mission..."
+        : "Starting manual distillation...",
     });
     setShowDistillUI(true);
     try {
       await fetch("http://127.0.0.1:2000/distill/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           collection_name: selectedCollection,
           auto_deploy: isAgentic,
-          persona: distillPersona
-        })
+          persona: distillPersona,
+        }),
       });
     } catch (e) {
-       setDistillStatus({ step: 'error', progress: 0, current_task: 'Failed to contact Agent.' });
+      setDistillStatus({
+        step: "error",
+        progress: 0,
+        current_task: "Failed to contact Agent.",
+      });
     }
   };
 
   const handleDeployToHF = async () => {
     if (!selectedCollection) return;
-    setDistillStatus(prev => ({ ...prev, step: 'deploying', progress: 95, current_task: 'Initiating HF Handshake...' }));
+    setDistillStatus((prev) => ({
+      ...prev,
+      step: "deploying",
+      progress: 95,
+      current_task: "Initiating HF Handshake...",
+    }));
     try {
       const resp = await fetch("http://127.0.0.1:2000/distill/deploy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ collection_name: selectedCollection })
+        body: JSON.stringify({ collection_name: selectedCollection }),
       });
       const data = await resp.json();
       if (data.error) throw new Error(data.error);
     } catch (e) {
-      setDistillStatus({ step: 'error', progress: 0, current_task: (e as Error).message });
+      setDistillStatus({
+        step: "error",
+        progress: 0,
+        current_task: (e as Error).message,
+      });
     }
   };
-
 
   const handleBrowseFile = async () => {
     try {
@@ -195,7 +281,7 @@ export function KnowledgeLibrary({ onDistillComplete, distillStatus, setDistillS
         setSourceInput(data.path);
         // Auto-generate collection name from filename if not set
         if (!newCollectionName && !selectedCollection) {
-          const base = data.path.split(/[\\/]/).pop()?.split('.')[0];
+          const base = data.path.split(/[\\/]/).pop()?.split(".")[0];
           if (base) setNewCollectionName(base + "-docs");
         }
       }
@@ -204,16 +290,122 @@ export function KnowledgeLibrary({ onDistillComplete, distillStatus, setDistillS
     }
   };
 
+  const handleStartTextDistillation = async (source: any) => {
+    if (!source) return;
+    setDistillStatus({
+      step: "init",
+      progress: 5,
+      current_task: "Creating Alpaca dataset from pasted text...",
+    });
+    setShowDistillUI(true);
+    try {
+      const sourceResp = await fetch(`http://127.0.0.1:2000/text_sources/${source.id}`);
+      const sourceData = await sourceResp.json();
+      if (!sourceResp.ok) {
+        throw new Error(sourceData.detail || "Failed to load pasted text source.");
+      }
+
+      const resp = await fetch("http://127.0.0.1:2000/distill/text", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          raw_text: sourceData.raw_text,
+          dataset_name: source.display_name || source.id,
+          auto_deploy: false,
+          persona: distillPersona,
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        throw new Error(data.detail || data.error || "Failed to start text dataset creation.");
+      }
+
+      setStatusMsg({
+        text: `Alpaca dataset creation started: ${data.dataset_name}.`,
+        type: "success",
+      });
+
+      const refreshStartedAt = Date.now();
+      const refreshInterval = window.setInterval(async () => {
+        await fetchLocalDatasets();
+        const statusResp = await fetch("http://127.0.0.1:2000/distill/status");
+        const status = await statusResp.json();
+        if (
+          status.step === "complete" ||
+          status.step === "error" ||
+          Date.now() - refreshStartedAt > 120000
+        ) {
+          window.clearInterval(refreshInterval);
+          await fetchLocalDatasets();
+        }
+      }, 3000);
+      setTimeout(() => setStatusMsg(null), 10000);
+    } catch (e) {
+      setDistillStatus({
+        step: "error",
+        progress: 0,
+        current_task: (e as Error).message,
+      });
+      setStatusMsg({
+        text: "Text dataset creation failed: " + (e as Error).message,
+        type: "error",
+      });
+    }
+  };
 
   const handleIngest = async () => {
     const collection = newCollectionName || selectedCollection;
-    if (!collection) {
-      setStatusMsg({ text: "Please enter a name for your New Collection below.", type: 'error' });
+    if (sourceType !== "text" && !collection) {
+      setStatusMsg({
+        text: "Please enter a name for your New Collection below.",
+        type: "error",
+      });
       return;
     }
 
-    if (!sourceInput) {
-      setStatusMsg({ text: "Please provide a source URL or file path.", type: 'error' });
+    if (!sourceInput.trim()) {
+      setStatusMsg({
+        text:
+          sourceType === "text"
+            ? "Please paste text to ingest."
+            : "Please provide a source URL or file path.",
+        type: "error",
+      });
+      return;
+    }
+
+    if (sourceType === "text") {
+      try {
+        const sourceName = newCollectionName || selectedCollection || "Pasted Text";
+        const resp = await fetch("http://127.0.0.1:2000/text_sources", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            raw_text: sourceInput,
+            name: sourceName,
+          }),
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+          throw new Error(data.detail || data.error || "Failed to save pasted text.");
+        }
+        setStatusMsg({
+          text: `Pasted text saved: ${data.source.display_name}. Select it in the sidebar to create an Alpaca dataset.`,
+          type: "success",
+        });
+        setSourceInput("");
+        setNewCollectionName("");
+        await fetchTextSources();
+        setSelectedTextSource(data.source);
+        setSelectedCollection(null);
+        setSelectedDataset(null);
+        setTimeout(() => setStatusMsg(null), 10000);
+      } catch (e) {
+        setStatusMsg({
+          text: "Pasted text save failed: " + (e as Error).message,
+          type: "error",
+        });
+      }
       return;
     }
 
@@ -223,21 +415,21 @@ export function KnowledgeLibrary({ onDistillComplete, distillStatus, setDistillS
 
     // Simulate progress for UI feedback while waiting for one-shot tool
     const progressInterval = setInterval(() => {
-      setMiningStep(prev => (prev < 4 ? prev + 1 : prev));
+      setMiningStep((prev) => (prev < 4 ? prev + 1 : prev));
     }, 2000);
 
     try {
-      const resp = await fetch("http://127.0.0.1:1001/mcp/call", {
+      const resp = await fetch("http://127.0.0.1:3001/mcp/call", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          name: "ingest_knowledge", 
-          arguments: { source: sourceInput, collection: collection } 
-        })
+        body: JSON.stringify({
+          name: "ingest_knowledge",
+          arguments: { source: sourceInput, collection: collection },
+        }),
       });
       const data = await resp.json();
       const text = data.error || data[0]?.text || data.result?.[0]?.text || "";
-      
+
       clearInterval(progressInterval);
       setMiningStep(5);
 
@@ -245,27 +437,41 @@ export function KnowledgeLibrary({ onDistillComplete, distillStatus, setDistillS
         const jsonStr = text.split("[JSON_RESULTS]")[1].trim();
         const stats = JSON.parse(jsonStr);
         const report = stats.report;
-        
-        setStatusMsg({ 
-          text: `✅ Harvest Complete: ${report.chunks} chunks indexed from ${report.source} (${Math.round(report.chars/1000)}k chars).`, 
-          type: 'success' 
+
+        setStatusMsg({
+          text: `✅ Harvest Complete: ${report.chunks} chunks indexed from ${report.source} (${Math.round(report.chars / 1000)}k chars).`,
+          type: "success",
         });
         setTimeout(() => setStatusMsg(null), 10000);
 
         // Save to history
-        const newHistory = [sourceInput, ...sourceHistory.filter(s => s !== sourceInput)].slice(0, 10);
-        setSourceHistory(newHistory);
-        localStorage.setItem('vml_source_history', JSON.stringify(newHistory));
+        if (sourceType !== "text") {
+          const newHistory = [
+            sourceInput,
+            ...sourceHistory.filter((s) => s !== sourceInput),
+          ].slice(0, 10);
+          setSourceHistory(newHistory);
+          localStorage.setItem(
+            "vml_source_history",
+            JSON.stringify(newHistory),
+          );
+        }
 
-        setSourceInput('');
-        setNewCollectionName('');
+        setSourceInput("");
+        setNewCollectionName("");
         fetchCollections();
       } else {
-        setStatusMsg({ text: text || "An unknown ingestion error occurred.", type: 'error' });
+        setStatusMsg({
+          text: text || "An unknown ingestion error occurred.",
+          type: "error",
+        });
       }
     } catch (e) {
       clearInterval(progressInterval);
-      setStatusMsg({ text: "Mining Pipeline Interrupted: " + (e as Error).message, type: 'error' });
+      setStatusMsg({
+        text: "Mining Pipeline Interrupted: " + (e as Error).message,
+        type: "error",
+      });
     } finally {
       setTimeout(() => setIsMining(false), 3000);
     }
@@ -275,29 +481,35 @@ export function KnowledgeLibrary({ onDistillComplete, distillStatus, setDistillS
     setIsDeleting(collectionName);
     setStatusMsg(null);
     try {
-      const resp = await fetch("http://127.0.0.1:1001/mcp/call", {
+      const resp = await fetch("http://127.0.0.1:3001/mcp/call", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          name: "delete_knowledge_collection", 
-          arguments: { collection: collectionName } 
-        })
+        body: JSON.stringify({
+          name: "delete_knowledge_collection",
+          arguments: { collection: collectionName },
+        }),
       });
       const data = await resp.json();
       const text = data.error || data[0]?.text || data.result?.[0]?.text || "";
       if (text.includes("[JSON_RESULTS]")) {
         if (selectedCollection === collectionName) {
-           setSelectedCollection(null);
+          setSelectedCollection(null);
         }
         fetchCollections();
-        setStatusMsg({ text: `Collection '${collectionName}' deleted successfully.`, type: 'success' });
+        setStatusMsg({
+          text: `Collection '${collectionName}' deleted successfully.`,
+          type: "success",
+        });
         setTimeout(() => setStatusMsg(null), 5000);
       } else {
-        setStatusMsg({ text: text || "Failed to delete collection.", type: 'error' });
+        setStatusMsg({
+          text: text || "Failed to delete collection.",
+          type: "error",
+        });
       }
     } catch (e) {
       console.error(e);
-      setStatusMsg({ text: "Delete request failed.", type: 'error' });
+      setStatusMsg({ text: "Delete request failed.", type: "error" });
     } finally {
       setIsDeleting(null);
     }
@@ -310,7 +522,9 @@ export function KnowledgeLibrary({ onDistillComplete, distillStatus, setDistillS
         <div className="w-80 border-r border-purple-500/10 flex flex-col bg-[#0D0B14]">
           <div className="p-6 flex-1 overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xs font-bold text-purple-400 uppercase tracking-widest">Collections</h3>
+              <h3 className="text-xs font-bold text-purple-400 uppercase tracking-widest">
+                Collections
+              </h3>
             </div>
 
             {isLoading ? (
@@ -321,27 +535,43 @@ export function KnowledgeLibrary({ onDistillComplete, distillStatus, setDistillS
             ) : collections.length === 0 ? (
               <div className="text-center py-12 px-6 rounded-3xl border border-dashed border-purple-500/10 bg-purple-500/5">
                 <Database className="mx-auto text-gray-700 mb-3" size={32} />
-                <p className="text-xs text-gray-500 leading-relaxed">No knowledge bases yet. Create your first by adding a source on the right.</p>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  No knowledge bases yet. Create your first by adding a source
+                  on the right.
+                </p>
               </div>
             ) : (
               <div className="space-y-2">
-                {collections.map(c => (
+                {collections.map((c) => (
                   <div
                     key={c.name}
                     role="button"
                     tabIndex={0}
-                    onClick={() => setSelectedCollection(c.name)}
+                    onClick={() => {
+                      setSelectedCollection(c.name);
+                      setSelectedDataset(null);
+                      setSelectedTextSource(null);
+                    }}
                     className={`w-full text-left px-4 py-3 rounded-xl transition-all flex items-center justify-between group cursor-pointer ${
-                      selectedCollection === c.name 
-                        ? 'bg-purple-500/20 border border-purple-500/30 text-purple-200' 
-                        : 'hover:bg-purple-500/5 border border-transparent text-gray-400'
+                      selectedCollection === c.name
+                        ? "bg-purple-500/20 border border-purple-500/30 text-purple-200"
+                        : "hover:bg-purple-500/5 border border-transparent text-gray-400"
                     }`}
                   >
                     <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <div className={`w-2 h-2 rounded-full shrink-0 ${selectedCollection === c.name ? 'bg-purple-400 shadow-[0_0_8px_rgba(168,85,247,0.5)]' : 'bg-gray-600'}`} />
+                      <div
+                        className={`w-2 h-2 rounded-full shrink-0 ${selectedCollection === c.name ? "bg-purple-400 shadow-[0_0_8px_rgba(168,85,247,0.5)]" : "bg-gray-600"}`}
+                      />
                       <div className="flex flex-col min-w-0 flex-1">
-                        <span className="text-sm font-medium truncate pr-2" title={c.name}>{c.name}</span>
-                        <span className="text-[10px] text-gray-500 font-mono tracking-tighter">{c.count} chunks</span>
+                        <span
+                          className="text-sm font-medium truncate pr-2"
+                          title={c.name}
+                        >
+                          {c.name}
+                        </span>
+                        <span className="text-[10px] text-gray-500 font-mono tracking-tighter">
+                          {c.count} chunks
+                        </span>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -355,10 +585,129 @@ export function KnowledgeLibrary({ onDistillComplete, distillStatus, setDistillS
                         disabled={isDeleting === c.name}
                         className={`h-7 w-7 p-0 rounded-lg hover:bg-rose-500/20 text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity`}
                       >
-                        {isDeleting === c.name ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                        {isDeleting === c.name ? (
+                          <Loader2 size={12} className="animate-spin" />
+                        ) : (
+                          <Trash2 size={12} />
+                        )}
                       </Button>
-                      <ChevronRight size={14} className={`transition-transform ${selectedCollection === c.name ? 'translate-x-1' : 'opacity-0 stroke-gray-500'}`} />
+                      <ChevronRight
+                        size={14}
+                        className={`transition-transform ${selectedCollection === c.name ? "translate-x-1" : "opacity-0 stroke-gray-500"}`}
+                      />
                     </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-8 flex items-center justify-between mb-4">
+              <h3 className="text-xs font-bold text-amber-400 uppercase tracking-widest">
+                Pasted Text
+              </h3>
+              <span className="text-[10px] text-gray-600 font-mono">
+                {textSources.length}
+              </span>
+            </div>
+
+            {textSources.length === 0 ? (
+              <div className="text-center py-8 px-6 rounded-3xl border border-dashed border-amber-500/10 bg-amber-500/5">
+                <FileText className="mx-auto text-gray-700 mb-3" size={28} />
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  Saved pasted text will appear here before distillation.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {textSources.map((source) => (
+                  <div
+                    key={source.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => {
+                      setSelectedTextSource(source);
+                      setSelectedCollection(null);
+                      setSelectedDataset(null);
+                    }}
+                    className={`w-full text-left px-4 py-3 rounded-xl transition-all flex items-center justify-between group cursor-pointer ${
+                      selectedTextSource?.id === source.id
+                        ? "bg-amber-500/20 border border-amber-500/30 text-amber-100"
+                        : "hover:bg-amber-500/5 border border-transparent text-gray-400"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div
+                        className={`w-2 h-2 rounded-full shrink-0 ${selectedTextSource?.id === source.id ? "bg-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.5)]" : "bg-gray-600"}`}
+                      />
+                      <div className="flex flex-col min-w-0 flex-1">
+                        <span className="text-sm font-medium truncate pr-2">
+                          {source.display_name || source.id}
+                        </span>
+                        <span className="text-[10px] text-gray-500 font-mono tracking-tighter truncate">
+                          {source.chars || 0} chars · {source.size_kb || 0} KB
+                        </span>
+                      </div>
+                    </div>
+                    <FileText
+                      size={14}
+                      className={`transition-transform ${selectedTextSource?.id === source.id ? "translate-x-1" : "opacity-0 stroke-gray-500"}`}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-8 flex items-center justify-between mb-4">
+              <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-widest">
+                Datasets
+              </h3>
+              <span className="text-[10px] text-gray-600 font-mono">
+                {localDatasets.length}
+              </span>
+            </div>
+
+            {localDatasets.length === 0 ? (
+              <div className="text-center py-8 px-6 rounded-3xl border border-dashed border-indigo-500/10 bg-indigo-500/5">
+                <FileText className="mx-auto text-gray-700 mb-3" size={28} />
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  Pasted text datasets will appear here after Alpaca creation.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {localDatasets.map((ds) => (
+                  <div
+                    key={ds.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => {
+                      setSelectedDataset(ds.id);
+                      setSelectedCollection(null);
+                      setSelectedTextSource(null);
+                    }}
+                    className={`w-full text-left px-4 py-3 rounded-xl transition-all flex items-center justify-between group cursor-pointer ${
+                      selectedDataset === ds.id
+                        ? "bg-indigo-500/20 border border-indigo-500/30 text-indigo-200"
+                        : "hover:bg-indigo-500/5 border border-transparent text-gray-400"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div
+                        className={`w-2 h-2 rounded-full shrink-0 ${selectedDataset === ds.id ? "bg-indigo-400 shadow-[0_0_8px_rgba(99,102,241,0.5)]" : "bg-gray-600"}`}
+                      />
+                      <div className="flex flex-col min-w-0 flex-1">
+                        <span className="text-sm font-medium truncate pr-2">
+                          {ds.display_name || ds.id.replace(".jsonl", "")}
+                        </span>
+                        <span className="text-[10px] text-gray-500 font-mono tracking-tighter truncate">
+                          {ds.id} · {ds.size_kb || 0} KB
+                        </span>
+                      </div>
+                    </div>
+                    <FileText
+                      size={14}
+                      className={`transition-transform ${selectedDataset === ds.id ? "translate-x-1" : "opacity-0 stroke-gray-500"}`}
+                    />
                   </div>
                 ))}
               </div>
@@ -369,7 +718,9 @@ export function KnowledgeLibrary({ onDistillComplete, distillStatus, setDistillS
           <div className="p-6 border-t border-purple-500/10 bg-purple-500/5">
             <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-purple-400/60 mb-2">
               <span>Local Storage Usage</span>
-              <span className="text-purple-400">{totalStorage.toFixed(1)} MB</span>
+              <span className="text-purple-400">
+                {totalStorage.toFixed(1)} MB
+              </span>
             </div>
           </div>
         </div>
@@ -388,71 +739,141 @@ export function KnowledgeLibrary({ onDistillComplete, distillStatus, setDistillS
 
               <div className="grid gap-6 p-8 rounded-3xl bg-[#140F1D]/80 border border-purple-500/10 backdrop-blur-xl shadow-2xl relative overflow-hidden group">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/5 blur-[100px] rounded-full -translate-y-1/2 translate-x-1/2" />
-                
+
                 <div className="space-y-4">
-                  <label className="text-xs font-bold text-purple-400 uppercase tracking-widest pl-1">Knowledge Source</label>
+                  <label className="text-xs font-bold text-purple-400 uppercase tracking-widest pl-1">
+                    Knowledge Source
+                  </label>
+                  <div className="flex gap-2">
+                    <Button
+                      variant={
+                        sourceType === "path_or_url" ? "primary" : "ghost"
+                      }
+                      className={
+                        sourceType === "path_or_url"
+                          ? "px-3 py-1.5 text-xs"
+                          : "px-3 py-1.5 text-xs bg-purple-500/10 border border-purple-500/20 text-purple-300"
+                      }
+                      onClick={() => {
+                        setSourceType("path_or_url");
+                        setSourceInput("");
+                      }}
+                    >
+                      URL / PDF
+                    </Button>
+                    <Button
+                      variant={sourceType === "text" ? "primary" : "ghost"}
+                      className={
+                        sourceType === "text"
+                          ? "px-3 py-1.5 text-xs"
+                          : "px-3 py-1.5 text-xs bg-purple-500/10 border border-purple-500/20 text-purple-300"
+                      }
+                      onClick={() => {
+                        setSourceType("text");
+                        setSourceInput("");
+                      }}
+                    >
+                      Pasted Text
+                    </Button>
+                  </div>
                   <div className="relative">
-                    <div className="flex gap-2">
-                      <input 
-                        type="text"
-                        list="source-history"
-                        value={sourceInput}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setSourceInput(val);
-                          // Auto-generate collection name if empty
-                          if (!newCollectionName && !selectedCollection && val) {
-                            try {
-                              const url = new URL(val);
-                              const slug = url.hostname.split('.')[0] + "-site";
-                              setNewCollectionName(slug);
-                            } catch (e) {
-                              if (val.includes('\\') || val.includes('/')) {
-                                 const base = val.split(/[\\/]/).pop()?.split('.')[0];
-                                 if (base) setNewCollectionName(base + "-docs");
+                    {sourceType === "path_or_url" ? (
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          list="source-history"
+                          value={sourceInput}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setSourceInput(val);
+                            // Auto-generate collection name if empty
+                            if (
+                              !newCollectionName &&
+                              !selectedCollection &&
+                              val
+                            ) {
+                              try {
+                                const url = new URL(val);
+                                const slug =
+                                  url.hostname.split(".")[0] + "-site";
+                                setNewCollectionName(slug);
+                              } catch (e) {
+                                if (val.includes("\\") || val.includes("/")) {
+                                  const base = val
+                                    .split(/[\\/]/)
+                                    .pop()
+                                    ?.split(".")[0];
+                                  if (base)
+                                    setNewCollectionName(base + "-docs");
+                                }
                               }
                             }
-                          }
-                        }}
-                        placeholder="Local PDF path or Web Link"
-                        className="flex-1 bg-[#0D0B14] border border-purple-500/20 rounded-2xl py-4 pl-12 pr-4 text-sm focus:outline-none focus:border-purple-500 shadow-inner"
+                          }}
+                          placeholder="Local PDF path or Web Link"
+                          className="flex-1 bg-[#0D0B14] border border-purple-500/20 rounded-2xl py-4 pl-12 pr-4 text-sm focus:outline-none focus:border-purple-500 shadow-inner"
+                        />
+                        <Button
+                          onClick={handleBrowseFile}
+                          variant="ghost"
+                          className="h-auto px-4 bg-purple-500/10 border border-purple-500/20 rounded-2xl text-purple-400 hover:bg-purple-500/20"
+                        >
+                          Browse
+                        </Button>
+                      </div>
+                    ) : (
+                      <textarea
+                        value={sourceInput}
+                        onChange={(e) => setSourceInput(e.target.value)}
+                        placeholder="Paste any text, notes, docs, or transcripts here..."
+                        className="w-full min-h-40 bg-[#0D0B14] border border-purple-500/20 rounded-2xl py-4 pl-12 pr-4 text-sm focus:outline-none focus:border-purple-500 shadow-inner resize-y"
                       />
-                      <Button 
-                        onClick={handleBrowseFile}
-                        variant="ghost"
-                        className="h-auto px-4 bg-purple-500/10 border border-purple-500/20 rounded-2xl text-purple-400 hover:bg-purple-500/20"
-                      >
-                        Browse
-                      </Button>
-                    </div>
-                    <datalist id="source-history">
-                      {sourceHistory.map(h => <option key={h} value={h} />)}
-                      <option value="https://vishnusureshperumbavoor.github.io/V-S-P/" />
-                    </datalist>
+                    )}
+                    {sourceType === "path_or_url" && (
+                      <datalist id="source-history">
+                        {sourceHistory.map((h) => (
+                          <option key={h} value={h} />
+                        ))}
+                        <option value="https://vishnusureshperumbavoor.github.io/V-S-P/" />
+                      </datalist>
+                    )}
                     <div className="absolute left-4 top-1/2 -translate-y-1/2 text-purple-400">
-                      {sourceInput.startsWith('http') ? <Globe size={20} /> : <FileText size={20} />}
+                      {sourceType === "text" ? (
+                        <FileText size={20} />
+                      ) : sourceInput.startsWith("http") ? (
+                        <Globe size={20} />
+                      ) : (
+                        <FileText size={20} />
+                      )}
                     </div>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-4">
-                    <label className="text-xs font-bold text-purple-400 uppercase tracking-widest pl-1">Attach to Collection</label>
-                    <select 
-                      value={selectedCollection || ''}
+                    <label className="text-xs font-bold text-purple-400 uppercase tracking-widest pl-1">
+                      Attach to Collection
+                    </label>
+                    <select
+                      value={selectedCollection || ""}
                       onChange={(e) => {
                         setSelectedCollection(e.target.value);
-                        setNewCollectionName('');
+                        setNewCollectionName("");
                       }}
                       className="w-full bg-[#0D0B14] border border-purple-500/20 rounded-2xl py-4 px-4 text-sm focus:outline-none focus:border-purple-500"
                     >
                       <option value="">Select Existing...</option>
-                      {collections.map(c => <option key={c.name} value={c.name}>{c.name} ({c.count})</option>)}
+                      {collections.map((c) => (
+                        <option key={c.name} value={c.name}>
+                          {c.name} ({c.count})
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div className="space-y-4">
-                    <label className="text-xs font-bold text-purple-400 uppercase tracking-widest pl-1">Or Create New</label>
-                    <input 
+                    <label className="text-xs font-bold text-purple-400 uppercase tracking-widest pl-1">
+                      Or Create New
+                    </label>
+                    <input
                       type="text"
                       ref={newNameRef}
                       value={newCollectionName}
@@ -467,85 +888,106 @@ export function KnowledgeLibrary({ onDistillComplete, distillStatus, setDistillS
                 </div>
 
                 <div className="pt-4 flex flex-col gap-4">
-                   {isMining ? (
-                     <div className="space-y-6 animate-in fade-in zoom-in-95 duration-500">
-                        <div className="grid grid-cols-5 gap-2">
-                           {[1,2,3,4,5].map(step => (
-                             <div key={step} className={`h-1.5 rounded-full transition-all duration-700 ${
-                                miningStep >= step ? 'bg-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.5)]' : 'bg-gray-800'
-                             }`} />
-                           ))}
-                        </div>
-                        
-                        <div className="space-y-4">
-                           <div className="flex items-center justify-between text-xs font-bold uppercase tracking-widest text-purple-400">
-                              <span>
-                                 {miningStep === 1 && "📡 Handshaking..."}
-                                 {miningStep === 2 && "⛏️ Mining Content..."}
-                                 {miningStep === 3 && "✂️ Semantic Chunking..."}
-                                 {miningStep === 4 && "🧠 Encoding Embeddings..."}
-                                 {miningStep === 5 && "💾 Finalizing Index..."}
-                              </span>
-                              <span className="animate-pulse">ACTIVE</span>
-                           </div>
+                  {isMining ? (
+                    <div className="space-y-6 animate-in fade-in zoom-in-95 duration-500">
+                      <div className="grid grid-cols-5 gap-2">
+                        {[1, 2, 3, 4, 5].map((step) => (
+                          <div
+                            key={step}
+                            className={`h-1.5 rounded-full transition-all duration-700 ${
+                              miningStep >= step
+                                ? "bg-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.5)]"
+                                : "bg-gray-800"
+                            }`}
+                          />
+                        ))}
+                      </div>
 
-                           <div className="p-6 rounded-2xl bg-[#0B090F] border border-purple-500/10 font-mono text-[11px] h-32 overflow-hidden relative">
-                              <div className="absolute inset-0 bg-gradient-to-t from-[#0B090F] via-transparent to-transparent pointer-events-none" />
-                              <div className="space-y-1.5 text-purple-300/60">
-                                 {miningStep >= 2 && (
-                                   <div className="animate-in slide-in-from-bottom-2 duration-300">
-                                      {"> "} SCRAPING_URL: {sourceInput}...
-                                   </div>
-                                 )}
-                                 {miningStep >= 3 && (
-                                   <div className="animate-in slide-in-from-bottom-2 duration-300">
-                                      {"> "} INITIALIZING_VML_RECURSIVE_SPLITTER...
-                                   </div>
-                                 )}
-                                 {miningStep >= 4 && (
-                                   <div className="animate-in slide-in-from-bottom-2 duration-300">
-                                      {"> "} BGE_SMALL_EN_V1_5_ENCODING_READY...
-                                   </div>
-                                 )}
-                                 <div className="text-purple-400 animate-pulse mt-2">
-                                    {miningStep === 2 && "> EXTRACTING_CONTENT_CHUNKS..."}
-                                    {miningStep === 3 && "> GENERATING_VECTOR_PINS..."}
-                                    {miningStep === 4 && "> PERSISTING_TO_CHROMADB..."}
-                                 </div>
-                              </div>
-                           </div>
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between text-xs font-bold uppercase tracking-widest text-purple-400">
+                          <span>
+                            {miningStep === 1 && "📡 Handshaking..."}
+                            {miningStep === 2 && "⛏️ Mining Content..."}
+                            {miningStep === 3 && "✂️ Semantic Chunking..."}
+                            {miningStep === 4 && "🧠 Encoding Embeddings..."}
+                            {miningStep === 5 && "💾 Finalizing Index..."}
+                          </span>
+                          <span className="animate-pulse">ACTIVE</span>
                         </div>
-                     </div>
-                   ) : (
+
+                        <div className="p-6 rounded-2xl bg-[#0B090F] border border-purple-500/10 font-mono text-[11px] h-32 overflow-hidden relative">
+                          <div className="absolute inset-0 bg-gradient-to-t from-[#0B090F] via-transparent to-transparent pointer-events-none" />
+                          <div className="space-y-1.5 text-purple-300/60">
+                            {miningStep >= 2 && (
+                              <div className="animate-in slide-in-from-bottom-2 duration-300">
+                                {"> "} SCRAPING_URL: {sourceInput}...
+                              </div>
+                            )}
+                            {miningStep >= 3 && (
+                              <div className="animate-in slide-in-from-bottom-2 duration-300">
+                                {"> "} INITIALIZING_VML_RECURSIVE_SPLITTER...
+                              </div>
+                            )}
+                            {miningStep >= 4 && (
+                              <div className="animate-in slide-in-from-bottom-2 duration-300">
+                                {"> "} BGE_SMALL_EN_V1_5_ENCODING_READY...
+                              </div>
+                            )}
+                            <div className="text-purple-400 animate-pulse mt-2">
+                              {miningStep === 2 &&
+                                "> EXTRACTING_CONTENT_CHUNKS..."}
+                              {miningStep === 3 &&
+                                "> GENERATING_VECTOR_PINS..."}
+                              {miningStep === 4 &&
+                                "> PERSISTING_TO_CHROMADB..."}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
                     <>
-                      <Button 
-                        onClick={handleIngest} 
+                      <Button
+                        onClick={handleIngest}
                         disabled={isMining || !sourceInput}
                         className={`w-full h-14 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 rounded-2xl font-semibold uppercase tracking-widest shadow-lg shadow-purple-500/20 transition-all`}
                       >
-                        Add to Knowledge Base
+                        {sourceType === "text"
+                          ? "Save Pasted Text"
+                          : "Add to Knowledge Base"}
                       </Button>
 
                       {statusMsg && (
-                        <div className={`p-4 rounded-2xl border flex items-center justify-between gap-3 text-sm animate-in zoom-in-95 ${
-                          statusMsg.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
-                          statusMsg.type === 'error' ? 'bg-rose-500/10 border-rose-500/20 text-rose-400' :
-                          'bg-purple-500/10 border-purple-500/20 text-purple-300'
-                        }`}>
+                        <div
+                          className={`p-4 rounded-2xl border flex items-center justify-between gap-3 text-sm animate-in zoom-in-95 ${
+                            statusMsg.type === "success"
+                              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                              : statusMsg.type === "error"
+                                ? "bg-rose-500/10 border-rose-500/20 text-rose-400"
+                                : "bg-purple-500/10 border-purple-500/20 text-purple-300"
+                          }`}
+                        >
                           <div className="flex items-center gap-3">
-                            {statusMsg.type === 'success' ? <CheckCircle2 size={18} /> : 
-                            statusMsg.type === 'error' ? <AlertCircle size={18} /> : 
-                            <Loader2 size={18} className="animate-spin" />}
+                            {statusMsg.type === "success" ? (
+                              <CheckCircle2 size={18} />
+                            ) : statusMsg.type === "error" ? (
+                              <AlertCircle size={18} />
+                            ) : (
+                              <Loader2 size={18} className="animate-spin" />
+                            )}
                             <span>{statusMsg.text}</span>
                           </div>
-                          {statusMsg.type === 'error' && (
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
+                          {statusMsg.type === "error" && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
                               className="h-8 w-8 p-0 hover:bg-rose-500/20 text-rose-400"
                               onClick={() => {
                                 navigator.clipboard.writeText(statusMsg.text);
-                                setStatusMsg({ ...statusMsg, text: "Error copied to clipboard!" });
+                                setStatusMsg({
+                                  ...statusMsg,
+                                  text: "Error copied to clipboard!",
+                                });
                                 setTimeout(() => setStatusMsg(statusMsg), 2000);
                               }}
                             >
@@ -555,10 +997,131 @@ export function KnowledgeLibrary({ onDistillComplete, distillStatus, setDistillS
                         </div>
                       )}
                     </>
-                   )}
+                  )}
                 </div>
               </div>
             </section>
+
+            {selectedTextSource && (
+              <section className="p-8 rounded-3xl border border-amber-500/10 bg-[#140F1D]/30 space-y-6 animate-in fade-in duration-500">
+                <div className="flex items-center justify-between pb-4 border-b border-amber-500/10 mb-2">
+                  <div className="flex items-center gap-3">
+                    <FileText className="text-amber-400" size={20} />
+                    <h3 className="font-bold text-[#E2D8F0]">
+                      Pasted Text: {selectedTextSource.display_name}
+                    </h3>
+                  </div>
+                  <div className="text-[10px] text-amber-400/60 font-mono">
+                    {selectedTextSource.chars || 0} chars
+                  </div>
+                </div>
+
+                <div className="p-6 rounded-2xl bg-[#0B090F]/50 border border-amber-500/10 space-y-4">
+                  <div className="flex items-end justify-between gap-4">
+                    <div className="flex flex-col gap-2 relative">
+                      <label className="text-[10px] font-bold text-amber-400/60 uppercase tracking-widest pl-1">
+                        Expert Persona
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={distillPersona}
+                          onChange={(e) => setDistillPersona(e.target.value)}
+                          placeholder="e.g. Radiologist, Legal Expert..."
+                          className="text-[11px] bg-[#0B090F] border border-amber-500/30 rounded-xl px-4 py-2 text-amber-100 outline-none focus:border-amber-500 font-bold tracking-wide h-9 w-56 shadow-inner"
+                        />
+                        {distillPersona !== "Generic" && (
+                          <button
+                            onClick={() => setDistillPersona("Generic")}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] text-amber-400/40 hover:text-amber-400 transition-colors uppercase font-bold"
+                          >
+                            Reset
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <Button
+                      variant="ghost"
+                      onClick={() => handleStartTextDistillation(selectedTextSource)}
+                      className="text-xs text-amber-400 hover:bg-amber-500/10 flex items-center gap-2 px-4 border border-amber-500/20 bg-amber-500/5 group h-9"
+                    >
+                      <Sparkles size={12} className="group-hover:animate-pulse" />
+                      Distill to Alpaca
+                    </Button>
+                  </div>
+
+                  <p className="text-xs text-gray-500 leading-relaxed">
+                    This pasted text is saved as a direct SFT source. It will not be embedded or added to ChromaDB. Click Distill to generate the Alpaca JSONL dataset.
+                  </p>
+                </div>
+
+                <div className="rounded-2xl bg-[#0B090F]/70 border border-amber-500/10 overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-amber-500/10">
+                    <div className="text-[10px] font-bold text-amber-400/60 uppercase tracking-widest">
+                      Source Text
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={!selectedTextContent}
+                      onClick={() =>
+                        handleCopyBlock(selectedTextContent, "pasted-text")
+                      }
+                      className="h-8 text-xs text-amber-400 hover:bg-amber-500/10 flex items-center gap-2"
+                    >
+                      {copiedId === "pasted-text" ? (
+                        <CheckCircle2 size={12} />
+                      ) : (
+                        <Copy size={12} />
+                      )}
+                      {copiedId === "pasted-text" ? "Copied" : "Copy"}
+                    </Button>
+                  </div>
+                  {isLoadingTextSource ? (
+                    <div className="p-8 flex items-center gap-3 text-sm text-gray-500">
+                      <Loader2 size={16} className="animate-spin" />
+                      Loading pasted text...
+                    </div>
+                  ) : (
+                    <pre className="max-h-[420px] overflow-y-auto whitespace-pre-wrap break-words p-5 text-sm leading-relaxed text-amber-50/80 font-mono custom-scrollbar">
+                      {selectedTextContent || "No text loaded."}
+                    </pre>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {selectedDataset && (
+              <section className="p-8 rounded-3xl border border-indigo-500/10 bg-[#140F1D]/30 space-y-6 animate-in fade-in duration-500">
+                <div className="flex items-center justify-between pb-4 border-b border-indigo-500/10 mb-2">
+                  <div className="flex items-center gap-3">
+                    <FileText className="text-indigo-400" size={20} />
+                    <h3 className="font-bold text-[#E2D8F0]">
+                      Active Dataset:{" "}
+                      {localDatasets.find((ds) => ds.id === selectedDataset)
+                        ?.display_name || selectedDataset}
+                    </h3>
+                  </div>
+                  <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 text-xs font-bold">
+                    <CheckCircle2 size={12} />
+                    Alpaca JSONL Ready
+                  </div>
+                </div>
+
+                <div className="p-6 rounded-2xl bg-[#0B090F]/50 border border-indigo-500/10 space-y-3">
+                  <div className="text-[10px] font-bold text-indigo-400/60 uppercase tracking-widest">
+                    Local File
+                  </div>
+                  <div className="text-sm text-indigo-100 font-mono break-all">
+                    server/data/datasets/{selectedDataset}
+                  </div>
+                  <p className="text-xs text-gray-500 leading-relaxed">
+                    This dataset was created from pasted text without vector indexing or RAG embedding. Select it from the SFT dataset picker to fine-tune.
+                  </p>
+                </div>
+              </section>
+            )}
 
             {/* Collection Details / Explorer Placeholder */}
             {selectedCollection && (
@@ -566,65 +1129,94 @@ export function KnowledgeLibrary({ onDistillComplete, distillStatus, setDistillS
                 <div className="flex items-center justify-between pb-4 border-b border-purple-500/10 mb-2">
                   <div className="flex items-center gap-3">
                     <Database className="text-purple-400" size={20} />
-                    <h3 className="font-bold text-[#E2D8F0]">Active Collection: {selectedCollection}</h3>
+                    <h3 className="font-bold text-[#E2D8F0]">
+                      Active Collection: {selectedCollection}
+                    </h3>
                   </div>
-                  
+
                   {collectionData.length > 0 && !isExploring && (
                     <div className="flex items-center gap-2">
-                       {localDatasets.find(ds => ds.display_name === selectedCollection && ds.hf_url) ? (
-                         <a 
-                           href={localDatasets.find(ds => ds.display_name === selectedCollection && ds.hf_url)?.hf_url}
-                           target="_blank"
-                           rel="noreferrer"
-                           className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 text-xs font-bold hover:bg-emerald-500/20 transition-all animate-in zoom-in-95"
-                         >
-                            <ExternalLink size={12} />
-                            View distilled dataset on HF
-                         </a>
-                       ) : localDatasets.some(ds => ds.display_name === selectedCollection) ? (
-                         <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 text-xs font-bold animate-in zoom-in-95">
-                            <CheckCircle2 size={12} />
-                            Dataset Ready (Local)
-                         </div>
-                       ) : (
-                         <div className="flex items-center gap-4">
-                            <div className="flex flex-col gap-2 relative">
-                             <label className="text-[10px] font-bold text-indigo-400/60 uppercase tracking-widest pl-1">Expert Persona</label>
-                             <div className="relative">
-                               <input 
-                                  type="text"
-                                  value={distillPersona}
-                                  onChange={(e) => setDistillPersona(e.target.value)}
-                                  placeholder="e.g. Radiologist, Legal Expert..."
-                                  className="text-[11px] bg-[#0B090F] border border-indigo-500/30 rounded-xl px-4 py-2 text-indigo-200 outline-none focus:border-indigo-500 font-bold tracking-wide h-9 w-56 shadow-inner"
-                               />
-                               {distillPersona !== 'Generic' && (
-                                 <button 
-                                   onClick={() => setDistillPersona('Generic')}
-                                   className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] text-indigo-400/40 hover:text-indigo-400 transition-colors uppercase font-bold"
-                                 >
-                                   Reset
-                                 </button>
-                               )}
-                             </div>
+                      {localDatasets.find(
+                        (ds) =>
+                          ds.display_name === selectedCollection && ds.hf_url,
+                      ) ? (
+                        <a
+                          href={
+                            localDatasets.find(
+                              (ds) =>
+                                ds.display_name === selectedCollection &&
+                                ds.hf_url,
+                            )?.hf_url
+                          }
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 text-xs font-bold hover:bg-emerald-500/20 transition-all animate-in zoom-in-95"
+                        >
+                          <ExternalLink size={12} />
+                          View distilled dataset on HF
+                        </a>
+                      ) : localDatasets.some(
+                          (ds) => ds.display_name === selectedCollection,
+                        ) ? (
+                        <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 text-xs font-bold animate-in zoom-in-95">
+                          <CheckCircle2 size={12} />
+                          Dataset Ready (Local)
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-4">
+                          <div className="flex flex-col gap-2 relative">
+                            <label className="text-[10px] font-bold text-indigo-400/60 uppercase tracking-widest pl-1">
+                              Expert Persona
+                            </label>
+                            <div className="relative">
+                              <input
+                                type="text"
+                                value={distillPersona}
+                                onChange={(e) =>
+                                  setDistillPersona(e.target.value)
+                                }
+                                placeholder="e.g. Radiologist, Legal Expert..."
+                                className="text-[11px] bg-[#0B090F] border border-indigo-500/30 rounded-xl px-4 py-2 text-indigo-200 outline-none focus:border-indigo-500 font-bold tracking-wide h-9 w-56 shadow-inner"
+                              />
+                              {distillPersona !== "Generic" && (
+                                <button
+                                  onClick={() => setDistillPersona("Generic")}
+                                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] text-indigo-400/40 hover:text-indigo-400 transition-colors uppercase font-bold"
+                                >
+                                  Reset
+                                </button>
+                              )}
                             </div>
-                            <Button 
-                              variant="ghost" 
-                              onClick={() => handleStartDistillation(true)}
-                              className="text-xs text-indigo-400 hover:bg-indigo-500/10 flex items-center gap-2 px-4 border border-indigo-500/20 bg-indigo-500/5 group h-9 mt-6"
-                            >
-                              <Sparkles size={12} className="group-hover:animate-pulse" />
-                              Distill
-                            </Button>
                           </div>
-                       )}
-                      <Button 
-                        variant="ghost" 
-                        onClick={() => handleCopyBlock(collectionData.map(b => b.content).join('\n\n'), 'all')}
+                          <Button
+                            variant="ghost"
+                            onClick={() => handleStartDistillation(true)}
+                            className="text-xs text-indigo-400 hover:bg-indigo-500/10 flex items-center gap-2 px-4 border border-indigo-500/20 bg-indigo-500/5 group h-9 mt-6"
+                          >
+                            <Sparkles
+                              size={12}
+                              className="group-hover:animate-pulse"
+                            />
+                            Distill
+                          </Button>
+                        </div>
+                      )}
+                      <Button
+                        variant="ghost"
+                        onClick={() =>
+                          handleCopyBlock(
+                            collectionData.map((b) => b.content).join("\n\n"),
+                            "all",
+                          )
+                        }
                         className="text-xs text-purple-400 hover:bg-purple-500/10 flex items-center gap-2"
                       >
-                        {copiedId === 'all' ? <CheckCircle2 size={12} /> : <Copy size={12} />}
-                        {copiedId === 'all' ? 'Copied All!' : 'Copy Collection'}
+                        {copiedId === "all" ? (
+                          <CheckCircle2 size={12} />
+                        ) : (
+                          <Copy size={12} />
+                        )}
+                        {copiedId === "all" ? "Copied All!" : "Copy Collection"}
                       </Button>
                     </div>
                   )}
@@ -632,85 +1224,119 @@ export function KnowledgeLibrary({ onDistillComplete, distillStatus, setDistillS
 
                 {/* Distillation Progress UI */}
                 {showDistillUI && (
-                  <div className={`p-6 rounded-2xl border space-y-4 animate-in slide-in-from-top-4 duration-500 ${
-                    distillStatus.step === 'error' ? 'bg-rose-500/5 border-rose-500/20' : 
-                    distillStatus.progress > 80 ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-indigo-500/5 border-indigo-500/20'
-                  }`}>
+                  <div
+                    className={`p-6 rounded-2xl border space-y-4 animate-in slide-in-from-top-4 duration-500 ${
+                      distillStatus.step === "error"
+                        ? "bg-rose-500/5 border-rose-500/20"
+                        : distillStatus.progress > 80
+                          ? "bg-emerald-500/5 border-emerald-500/20"
+                          : "bg-indigo-500/5 border-indigo-500/20"
+                    }`}
+                  >
                     <div className="flex items-center justify-between">
-                       <div className="flex items-center gap-3">
-                          <Activity className={`${distillStatus.step !== 'complete' && distillStatus.step !== 'deploying' ? 'text-indigo-400 animate-pulse' : 'hidden'}`} size={18} />
-                          <Share2 className={`${distillStatus.step === 'deploying' ? 'text-emerald-400 animate-bounce' : 'hidden'}`} size={18} />
-                          <CheckCircle2 className={`${distillStatus.step === 'complete' ? 'text-emerald-400' : 'hidden'}`} size={18} />
-                          <h4 className={`text-sm font-bold ${distillStatus.step === 'deploying' || distillStatus.step === 'complete' ? 'text-emerald-200' : 'text-indigo-200'}`}>
-                            {distillStatus.step === 'deploying' ? 'Autonomous Deployment Agent' : 
-                             distillStatus.step === 'complete' ? 'Mission Accomplished' : `Mining: ${selectedCollection}`}
-                          </h4>
-                       </div>
-                       <Button 
-                         variant="ghost" 
-                         size="sm" 
-                         className="h-6 text-[10px] text-gray-500 hover:text-white"
-                         onClick={() => setShowDistillUI(false)}
-                       >
-                         Dismiss
-                       </Button>
+                      <div className="flex items-center gap-3">
+                        <Activity
+                          className={`${distillStatus.step !== "complete" && distillStatus.step !== "deploying" ? "text-indigo-400 animate-pulse" : "hidden"}`}
+                          size={18}
+                        />
+                        <Share2
+                          className={`${distillStatus.step === "deploying" ? "text-emerald-400 animate-bounce" : "hidden"}`}
+                          size={18}
+                        />
+                        <CheckCircle2
+                          className={`${distillStatus.step === "complete" ? "text-emerald-400" : "hidden"}`}
+                          size={18}
+                        />
+                        <h4
+                          className={`text-sm font-bold ${distillStatus.step === "deploying" || distillStatus.step === "complete" ? "text-emerald-200" : "text-indigo-200"}`}
+                        >
+                          {distillStatus.step === "deploying"
+                            ? "Autonomous Deployment Agent"
+                            : distillStatus.step === "complete"
+                              ? "Mission Accomplished"
+                              : `Mining: ${selectedCollection}`}
+                        </h4>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 text-[10px] text-gray-500 hover:text-white"
+                        onClick={() => setShowDistillUI(false)}
+                      >
+                        Dismiss
+                      </Button>
                     </div>
 
                     <div className="space-y-2">
-                       <div className="flex justify-between text-[10px] font-mono text-indigo-400/80">
-                          <span>{distillStatus.current_task}</span>
-                          <span>{distillStatus.progress}%</span>
-                       </div>
-                       <div className="h-1.5 w-full bg-indigo-950 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-indigo-500 transition-all duration-1000 ease-out" 
-                            style={{ width: `${distillStatus.progress}%` }}
-                          />
-                       </div>
+                      <div className="flex justify-between text-[10px] font-mono text-indigo-400/80">
+                        <span>{distillStatus.current_task}</span>
+                        <span>{distillStatus.progress}%</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-indigo-950 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-indigo-500 transition-all duration-1000 ease-out"
+                          style={{ width: `${distillStatus.progress}%` }}
+                        />
+                      </div>
                     </div>
 
-                    {distillStatus.step === 'complete' && !distillStatus.current_task.includes('http') && (
-                       <div className="flex items-center justify-between pt-2">
+                    {distillStatus.step === "complete" &&
+                      !distillStatus.current_task.includes("http") && (
+                        <div className="flex items-center justify-between pt-2">
                           <div className="text-xs text-emerald-400 flex items-center gap-2">
-                             <CheckCircle2 size={14} />
-                             Knowledge Distilled Successfully.
+                            <CheckCircle2 size={14} />
+                            Knowledge Distilled Successfully.
                           </div>
-                       </div>
-                    )}
+                        </div>
+                      )}
 
-                    {distillStatus.step === 'complete' && distillStatus.current_task.includes('http') && (
-                      <div className="pt-4 border-t border-indigo-500/10 flex gap-3">
-                         <a 
-                           href={distillStatus.current_task.includes('Published to: ') ? distillStatus.current_task.split('Published to: ')[1] : '#'} 
-                           target="_blank" 
-                           rel="noreferrer"
-                           className="flex-1 flex items-center justify-center gap-2 p-3 rounded-xl bg-emerald-500/10 text-emerald-400 text-sm hover:bg-emerald-500/20 transition-all border border-emerald-500/20"
-                         >
+                    {distillStatus.step === "complete" &&
+                      distillStatus.current_task.includes("http") && (
+                        <div className="pt-4 border-t border-indigo-500/10 flex gap-3">
+                          <a
+                            href={
+                              distillStatus.current_task.includes(
+                                "Published to: ",
+                              )
+                                ? distillStatus.current_task.split(
+                                    "Published to: ",
+                                  )[1]
+                                : "#"
+                            }
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex-1 flex items-center justify-center gap-2 p-3 rounded-xl bg-emerald-500/10 text-emerald-400 text-sm hover:bg-emerald-500/20 transition-all border border-emerald-500/20"
+                          >
                             <ExternalLink size={16} />
                             View on Hugging Face
-                         </a>
-                         <button
-                           onClick={() => setShowDistillUI(false)}
-                           className="px-4 py-2 rounded-xl bg-white/5 text-gray-400 text-xs hover:bg-white/10 transition-all"
-                         >
+                          </a>
+                          <button
+                            onClick={() => setShowDistillUI(false)}
+                            className="px-4 py-2 rounded-xl bg-white/5 text-gray-400 text-xs hover:bg-white/10 transition-all"
+                          >
                             Dismiss
-                         </button>
-                      </div>
-                    )}
+                          </button>
+                        </div>
+                      )}
 
-                    {distillStatus.step === 'error' && (
-                       <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center gap-2">
-                          <AlertCircle size={14} />
-                          {distillStatus.current_task}
-                       </div>
+                    {distillStatus.step === "error" && (
+                      <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center gap-2">
+                        <AlertCircle size={14} />
+                        {distillStatus.current_task}
+                      </div>
                     )}
                   </div>
                 )}
-                
+
                 {isExploring ? (
                   <div className="p-12 text-center rounded-2xl bg-[#0B090F]/50 border border-dashed border-purple-500/10 flex flex-col items-center justify-center gap-3">
-                    <Loader2 size={24} className="animate-spin text-purple-400" />
-                    <span className="text-gray-500 text-sm">Decoding Semantic Chunks...</span>
+                    <Loader2
+                      size={24}
+                      className="animate-spin text-purple-400"
+                    />
+                    <span className="text-gray-500 text-sm">
+                      Decoding Semantic Chunks...
+                    </span>
                   </div>
                 ) : collectionData.length === 0 ? (
                   <div className="p-12 text-center rounded-2xl bg-[#0B090F]/50 border border-dashed border-purple-500/10 text-gray-500 text-sm">
@@ -719,23 +1345,35 @@ export function KnowledgeLibrary({ onDistillComplete, distillStatus, setDistillS
                 ) : (
                   <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
                     {collectionData.map((block, i) => (
-                      <div key={block.id || i} className="p-5 rounded-2xl bg-[#0B090F] border border-purple-500/10 hover:border-purple-500/30 transition-all group relative">
+                      <div
+                        key={block.id || i}
+                        className="p-5 rounded-2xl bg-[#0B090F] border border-purple-500/10 hover:border-purple-500/30 transition-all group relative"
+                      >
                         <div className="flex items-center justify-between mb-3">
                           <span className="text-xs font-mono font-bold text-purple-400/80 uppercase tracking-widest">
                             Block {i + 1}
                           </span>
                           <div className="flex items-center gap-3">
                             {block.metadata?.source && (
-                              <span className="text-[10px] text-gray-500 truncate max-w-[200px]" title={block.metadata.source}>
+                              <span
+                                className="text-[10px] text-gray-500 truncate max-w-[200px]"
+                                title={block.metadata.source}
+                              >
                                 {block.metadata.source}
                               </span>
                             )}
                             <button
-                              onClick={() => handleCopyBlock(block.content, block.id || i)}
+                              onClick={() =>
+                                handleCopyBlock(block.content, block.id || i)
+                              }
                               className="p-1.5 rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 hover:text-purple-300 transition-colors"
                               title="Copy Block Content"
                             >
-                              {copiedId === (block.id || i) ? <CheckCircle2 size={12} /> : <Copy size={12} />}
+                              {copiedId === (block.id || i) ? (
+                                <CheckCircle2 size={12} />
+                              ) : (
+                                <Copy size={12} />
+                              )}
                             </button>
                           </div>
                         </div>
@@ -745,7 +1383,9 @@ export function KnowledgeLibrary({ onDistillComplete, distillStatus, setDistillS
                       </div>
                     ))}
                     <div className="text-center pt-2 pb-4">
-                      <span className="text-xs font-mono text-purple-500/40 uppercase tracking-widest">End of Array (Showing max 50 chunks)</span>
+                      <span className="text-xs font-mono text-purple-500/40 uppercase tracking-widest">
+                        End of Array (Showing max 50 chunks)
+                      </span>
                     </div>
                   </div>
                 )}
@@ -756,4 +1396,4 @@ export function KnowledgeLibrary({ onDistillComplete, distillStatus, setDistillS
       </div>
     </div>
   );
-};
+}

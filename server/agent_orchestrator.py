@@ -102,14 +102,16 @@ async def handle_list_tools() -> list[types.Tool]:
         ),
         types.Tool(
             name="ingest_knowledge",
-            description="Mine knowledge from a PDF or URL and index it for semantic search.",
+            description="Mine knowledge from a PDF, URL, or pasted text and index it for semantic search.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "source": {"type": "string", "description": "Local path to PDF or a Web URL"},
+                    "raw_text": {"type": "string", "description": "Raw pasted text to ingest directly"},
+                    "source_label": {"type": "string", "description": "Optional label used as metadata source for pasted text"},
                     "collection": {"type": "string", "description": "Collection name (e.g., 'HR-Handbook')"}
                 },
-                "required": ["source", "collection"],
+                "required": ["collection"],
             },
         ),
         types.Tool(
@@ -596,13 +598,20 @@ print("🏁 VML Quantization Pipeline Complete.")
 
     elif name == "ingest_knowledge":
         source = arguments.get("source")
+        raw_text = arguments.get("raw_text")
+        source_label = arguments.get("source_label", "pasted-text")
         collection = arguments.get("collection")
         
         try:
-            if source.startswith("http"):
-                report = rag_ingest.ingest_link(source, collection)
+            if raw_text:
+                report = rag_ingest.ingest_text(raw_text, collection, source_label)
             else:
-                report = rag_ingest.ingest_pdf(source, collection)
+                if not source:
+                    return [types.TextContent(type="text", text="❌ Ingestion failed: provide either 'source' or 'raw_text'.")]
+                if source.startswith("http"):
+                    report = rag_ingest.ingest_link(source, collection)
+                else:
+                    report = rag_ingest.ingest_pdf(source, collection)
                 
             if "error" in report:
                 return [types.TextContent(type="text", text=f"❌ Ingestion failed: {report['error']}")]
@@ -661,7 +670,8 @@ print("🏁 VML Quantization Pipeline Complete.")
         gpu_info = {"available": False, "name": "N/A", "vram_gb": 0}
         
         try:
-            has_gpu_env = os.system("nvidia-smi > nul 2>&1") == 0
+            null_device = "nul" if sys.platform == "win32" else "/dev/null"
+            has_gpu_env = os.system(f"nvidia-smi > {null_device} 2>&1") == 0
             if has_gpu_env:
                 import torch
                 if torch.cuda.is_available():

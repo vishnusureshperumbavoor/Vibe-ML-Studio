@@ -104,3 +104,27 @@ def ingest_link(url: str, collection_name: str):
     except Exception as e:
         print(f"❌ Failed to mine link {url}: {e}")
         return {"error": str(e), "chunks": 0}
+
+def ingest_text(raw_text: str, collection_name: str, source_label: str = "pasted-text"):
+    """
+    Ingests plain text directly into ChromaDB.
+    """
+    text = (raw_text or "").strip()
+    if not text:
+        return {"error": "No text provided for ingestion.", "chunks": 0}
+
+    final_chunks = splitter.split_text(text)
+    metadatas = [{"source": source_label, "type": "text"} for _ in final_chunks]
+    ids = [f"text_{uuid.uuid4().hex[:12]}" for _ in final_chunks]
+
+    if final_chunks:
+        knowledge_manager.add_documents(collection_name, final_chunks, metadatas, ids)
+        print(f"✅ Indexed {len(final_chunks)} text chunks from pasted input")
+
+    return {
+        "chunks": len(final_chunks),
+        "chars": sum(len(c) for c in final_chunks),
+        "snippets": final_chunks[:3],
+        "source": source_label,
+        "type": "text"
+    }
