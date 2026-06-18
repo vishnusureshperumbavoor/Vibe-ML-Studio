@@ -81,8 +81,14 @@ app.post("/mcp/call", async (req, res) => {
     }
 });
 
-const PORT = 1001;
-app.listen(PORT, () => {
-    console.log(`🌉 Node.js MCP Bridge listening on port ${PORT}`);
+const PORT = Number(process.env.MCP_BRIDGE_PORT || 3001);
+const HOST = "127.0.0.1";
+const httpServer = app.listen(PORT, HOST, () => {
+    console.log(`🌉 Node.js MCP Bridge listening at http://${HOST}:${PORT}`);
     initMCP();
+});
+
+httpServer.on("error", (error) => {
+    console.error(`❌ MCP Bridge failed to listen on http://${HOST}:${PORT}:`, error);
+    process.exit(1);
 });

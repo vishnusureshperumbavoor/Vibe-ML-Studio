@@ -51,7 +51,7 @@ const INITIAL_CONNECTORS: ConnectorConfig[] = [
     id: "huggingface",
     label: "Hugging Face MCP",
     description: "Local bridge for Hugging Face Hub tools (models/datasets).",
-    url: "http://127.0.0.1:1001",
+    url: "http://127.0.0.1:3001",
     enabled: true,
     status: "idle",
     tokenHint: "Set HF_TOKEN",
@@ -150,16 +150,18 @@ export default function App() {
   const [activeView, setActiveView] = useState<
     "studio" | "chat" | "workflow" | "knowledge" | "creative"
   >("chat");
-  const [workflowMode, setWorkflowMode] = useState<"quantize" | "finetune" | "evaluate" | "onnx">(
-    "finetune",
-  );
+  const [workflowMode, setWorkflowMode] = useState<
+    "quantize" | "finetune" | "evaluate" | "onnx"
+  >("finetune");
   const [isWorkflowExecuting, setIsWorkflowExecuting] = useState(false);
   const [deploymentUrl, setDeploymentUrl] = useState<string | null>(null);
   const [workflowModelFilename, setWorkflowModelFilename] = useState<
     string | null
   >(null);
   const [systemInfo, setSystemInfo] = useState<any>(null);
-  const [lastGeneratedImage, setLastGeneratedImage] = useState<string | undefined>(undefined);
+  const [lastGeneratedImage, setLastGeneratedImage] = useState<
+    string | undefined
+  >(undefined);
   const [chatSelectedModel, setChatSelectedModel] = useState<string>("");
   const [preSelectedDataset, setPreSelectedDataset] = useState<string | null>(
     null,
@@ -257,7 +259,7 @@ export default function App() {
 
   const fetchSystemInfo = async () => {
     try {
-      const resp = await fetch("http://127.0.0.1:1001/mcp/call", {
+      const resp = await fetch("http://127.0.0.1:3001/mcp/call", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: "get_system_specs", arguments: {} }),
@@ -352,7 +354,7 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
     });
     try {
       // 1. Call MCP to get script
-      const resp = await fetch("http://127.0.0.1:1001/mcp/call", {
+      const resp = await fetch("http://127.0.0.1:3001/mcp/call", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -600,7 +602,7 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
       const modelNameClean = modelId.split("/").pop()?.toLowerCase();
       setWorkflowModelFilename(`${modelNameClean}-q${bits}_0.gguf`);
 
-      const resp = await fetch("http://127.0.0.1:1001/mcp/call", {
+      const resp = await fetch("http://127.0.0.1:3001/mcp/call", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -768,21 +770,28 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
     );
   };
 
-  const handleStartGeneration = async (params: { prompt: string; mode: string; strength: number; guidance_scale: number; base_image?: File }) => {
+  const handleStartGeneration = async (params: {
+    prompt: string;
+    mode: string;
+    strength: number;
+    guidance_scale: number;
+    base_image?: File;
+  }) => {
     setIsGenerating(true);
     try {
       const formData = new FormData();
-      formData.append('prompt', params.prompt);
-      formData.append('strength', params.strength.toString());
-      formData.append('guidance_scale', params.guidance_scale.toString());
-      
-      if (params.mode === 'img2img' && params.base_image) {
-        formData.append('image', params.base_image);
+      formData.append("prompt", params.prompt);
+      formData.append("strength", params.strength.toString());
+      formData.append("guidance_scale", params.guidance_scale.toString());
+
+      if (params.mode === "img2img" && params.base_image) {
+        formData.append("image", params.base_image);
       }
 
-      const endpoint = params.mode === 'img2img' ? '/image/img2img' : '/image/generate';
+      const endpoint =
+        params.mode === "img2img" ? "/image/img2img" : "/image/generate";
       const resp = await fetch(`${API_BASE}${endpoint}`, {
-        method: 'POST',
+        method: "POST",
         body: formData,
       });
 
@@ -1589,9 +1598,9 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
             setShowDistillUI={setShowDistillUI}
           />
         ) : activeView === "creative" ? (
-          <CreativeStudio 
-            onGenerate={handleStartGeneration} 
-            isGenerating={isGenerating} 
+          <CreativeStudio
+            onGenerate={handleStartGeneration}
+            isGenerating={isGenerating}
             lastGeneratedImage={lastGeneratedImage}
           />
         ) : activeView === "workflow" ? (
@@ -1644,7 +1653,7 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
                   }}
                 />
               ) : workflowMode === "onnx" ? (
-                <OnnxPanel 
+                <OnnxPanel
                   onStart={handleStartOnnx}
                   isExecuting={isWorkflowExecuting}
                 />

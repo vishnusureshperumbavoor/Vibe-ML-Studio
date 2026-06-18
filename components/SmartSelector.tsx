@@ -1,5 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Search, ChevronDown, Check, Loader2, Cpu, Lock, Star, Download, Database } from 'lucide-react';
+import React, { useState, useEffect, useRef } from "react";
+import {
+  Search,
+  ChevronDown,
+  Check,
+  Loader2,
+  Cpu,
+  Lock,
+  Star,
+  Download,
+  Database,
+} from "lucide-react";
 
 interface ModelResult {
   id: string;
@@ -12,15 +22,21 @@ interface ModelResult {
 }
 
 interface SmartSelectorProps {
-  type: 'model' | 'dataset';
+  type: "model" | "dataset";
   onSelect: (id: string) => void;
   placeholder: string;
   defaultValue?: string;
   suggestions?: any[];
 }
 
-export const SmartSelector: React.FC<SmartSelectorProps> = ({ type, onSelect, placeholder, defaultValue, suggestions }) => {
-  const [query, setQuery] = useState(defaultValue || '');
+export const SmartSelector: React.FC<SmartSelectorProps> = ({
+  type,
+  onSelect,
+  placeholder,
+  defaultValue,
+  suggestions,
+}) => {
+  const [query, setQuery] = useState(defaultValue || "");
   const [results, setResults] = useState<any[]>([]);
   const [localData, setLocalData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -31,7 +47,8 @@ export const SmartSelector: React.FC<SmartSelectorProps> = ({ type, onSelect, pl
   useEffect(() => {
     const fetchLocal = async () => {
       try {
-        const endpoint = type === 'model' ? "/list_local_base_models" : "/list_local_datasets";
+        const endpoint =
+          type === "model" ? "/list_local_base_models" : "/list_local_datasets";
         const resp = await fetch(`http://127.0.0.1:2000${endpoint}`);
         const data = await resp.json();
         setLocalData(data.models || data.datasets || []);
@@ -45,12 +62,15 @@ export const SmartSelector: React.FC<SmartSelectorProps> = ({ type, onSelect, pl
   // Close dropdown on click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node)
+      ) {
         setIsOpen(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const skipSearchRef = useRef(false);
@@ -58,34 +78,38 @@ export const SmartSelector: React.FC<SmartSelectorProps> = ({ type, onSelect, pl
   const search = async (q: string) => {
     if (!q || q.length < 2) return;
     setIsLoading(true);
-    
+
     try {
       // 1. Search Local First
-      const localMatches = localData.filter(d => 
-        d.id.toLowerCase().includes(q.toLowerCase()) || 
-        (d.display_name && d.display_name.toLowerCase().includes(q.toLowerCase()))
-      ).map(d => ({...d, is_local: true}));
+      const localMatches = localData
+        .filter(
+          (d) =>
+            d.id.toLowerCase().includes(q.toLowerCase()) ||
+            (d.display_name &&
+              d.display_name.toLowerCase().includes(q.toLowerCase())),
+        )
+        .map((d) => ({ ...d, is_local: true }));
 
       // 2. Search Remote via MCP
-      const toolName = type === 'model' ? 'model_search' : 'dataset_search';
-      const mcpUrl = "http://127.0.0.1:1001/mcp/call"; 
-      
+      const toolName = type === "model" ? "model_search" : "dataset_search";
+      const mcpUrl = "http://127.0.0.1:3001/mcp/call";
+
       const resp = await fetch(mcpUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: toolName,
-          arguments: { query: q, limit: 10 }
-        })
+          arguments: { query: q, limit: 10 },
+        }),
       });
-      
+
       const payload = await resp.json();
-      const content = payload.result || payload; 
-      
+      const content = payload.result || payload;
+
       let remoteResults: any[] = [];
       if (content && content[0] && content[0].text) {
         let text = content[0].text;
-        
+
         if (text.includes("[JSON_RESULTS]")) {
           const jsonStr = text.split("[JSON_RESULTS]")[1].trim();
           remoteResults = JSON.parse(jsonStr);
@@ -95,10 +119,12 @@ export const SmartSelector: React.FC<SmartSelectorProps> = ({ type, onSelect, pl
           while ((m = regex.exec(text)) !== null) {
             remoteResults.push({
               id: m[1],
-              downloads: parseInt(m[2].replace(/,/g, '')),
+              downloads: parseInt(m[2].replace(/,/g, "")),
               likes: 0,
               gated: false,
-              is_cpu_ready: m[1].toLowerCase().includes('0.5b') || m[1].toLowerCase().includes('360m')
+              is_cpu_ready:
+                m[1].toLowerCase().includes("0.5b") ||
+                m[1].toLowerCase().includes("360m"),
             });
           }
         }
@@ -107,16 +133,17 @@ export const SmartSelector: React.FC<SmartSelectorProps> = ({ type, onSelect, pl
       // Merge and unique-ify (prefer local if ID matches)
       // For models, we compare normalized IDs
       const combined = [...localMatches];
-      remoteResults.forEach(rem => {
-        const isAlreadyIn = combined.some(loc => 
-            loc.id.toLowerCase() === rem.id.toLowerCase() || 
-            loc.id.replace('_', '/').toLowerCase() === rem.id.toLowerCase()
+      remoteResults.forEach((rem) => {
+        const isAlreadyIn = combined.some(
+          (loc) =>
+            loc.id.toLowerCase() === rem.id.toLowerCase() ||
+            loc.id.replace("_", "/").toLowerCase() === rem.id.toLowerCase(),
         );
         if (!isAlreadyIn) {
           combined.push(rem);
         }
       });
-      
+
       setResults(combined);
     } catch (e) {
       console.error("Search failed:", e);
@@ -128,8 +155,8 @@ export const SmartSelector: React.FC<SmartSelectorProps> = ({ type, onSelect, pl
   // Update query if defaultValue changes externally
   useEffect(() => {
     if (defaultValue !== undefined) {
-        setQuery(defaultValue);
-        skipSearchRef.current = true;
+      setQuery(defaultValue);
+      skipSearchRef.current = true;
     }
   }, [defaultValue]);
 
@@ -146,10 +173,14 @@ export const SmartSelector: React.FC<SmartSelectorProps> = ({ type, onSelect, pl
   }, [query]);
 
   // Merge suggestions with any local matches
-  const displayResults = query.length < 2 
-    ? [...(localData.map(d => ({...d, is_local: true}))), ...(suggestions || [])].filter((v, i, a) => a.findIndex(t => t.id === v.id) === i)
-    : results;
-    
+  const displayResults =
+    query.length < 2
+      ? [
+          ...localData.map((d) => ({ ...d, is_local: true })),
+          ...(suggestions || []),
+        ].filter((v, i, a) => a.findIndex((t) => t.id === v.id) === i)
+      : results;
+
   const isShowingSuggestions = query.length < 2;
 
   return (
@@ -170,7 +201,11 @@ export const SmartSelector: React.FC<SmartSelectorProps> = ({ type, onSelect, pl
           className="w-full bg-[#0B090F] border border-white/10 rounded-2xl pl-10 pr-10 py-3.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-amber-500/50 focus:ring-4 focus:ring-amber-500/5 transition-all shadow-inner"
         />
         <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-white/20">
-          {isLoading ? <Loader2 size={16} className="animate-spin text-amber-500" /> : <ChevronDown size={16} />}
+          {isLoading ? (
+            <Loader2 size={16} className="animate-spin text-amber-500" />
+          ) : (
+            <ChevronDown size={16} />
+          )}
         </div>
       </div>
 
@@ -182,13 +217,16 @@ export const SmartSelector: React.FC<SmartSelectorProps> = ({ type, onSelect, pl
                 <Star size={10} fill="currentColor" /> Quick Suggestions
               </div>
             )}
-            
+
             {displayResults.map((res) => (
               <button
                 key={res.id}
                 onClick={() => {
                   skipSearchRef.current = true;
-                  const cleanName = res.is_local && type === 'dataset' ? res.id.replace('.jsonl', '') : res.id;
+                  const cleanName =
+                    res.is_local && type === "dataset"
+                      ? res.id.replace(".jsonl", "")
+                      : res.id;
                   setQuery(cleanName);
                   onSelect(res.id);
                   setIsOpen(false);
@@ -198,7 +236,9 @@ export const SmartSelector: React.FC<SmartSelectorProps> = ({ type, onSelect, pl
               >
                 <div className="flex items-center justify-between w-full gap-2">
                   <span className="text-sm font-bold text-white group-hover:text-amber-400 transition-colors truncate">
-                    {res.is_local && type === 'dataset' ? res.id.replace('.jsonl', '') : res.id}
+                    {res.is_local && type === "dataset"
+                      ? res.id.replace(".jsonl", "")
+                      : res.id}
                   </span>
                   <div className="flex items-center gap-1.5 flex-none text-[10px] font-bold">
                     {res.is_local && (
@@ -218,11 +258,14 @@ export const SmartSelector: React.FC<SmartSelectorProps> = ({ type, onSelect, pl
                     )}
                   </div>
                 </div>
-                
+
                 <div className="flex items-center gap-4 mt-2 text-[10px] text-white/40 font-medium">
                   {res.is_local ? (
                     <span className="flex items-center gap-1 text-emerald-400/60 uppercase">
-                      Local {type === 'model' ? 'Base Model' : 'Dataset'} {res.size_kb ? `• ${res.size_kb > 1024 ? `${(res.size_kb/1024).toFixed(1)} MB` : `${res.size_kb} KB`}` : ''}
+                      Local {type === "model" ? "Base Model" : "Dataset"}{" "}
+                      {res.size_kb
+                        ? `• ${res.size_kb > 1024 ? `${(res.size_kb / 1024).toFixed(1)} MB` : `${res.size_kb} KB`}`
+                        : ""}
                     </span>
                   ) : (
                     <>

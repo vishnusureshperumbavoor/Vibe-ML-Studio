@@ -10,7 +10,7 @@ fi
 source venv/bin/activate
 
 # Install dependencies
-python -m pip install --upgrade pip setuptools wheel
+python -m pip install --upgrade pip "setuptools<82" wheel
 python -m pip install --prefer-binary --upgrade --upgrade-strategy eager -r requirements.txt
 
 # diffusers requires peft>=0.17.0; repair older envs proactively.
