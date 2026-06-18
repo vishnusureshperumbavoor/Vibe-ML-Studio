@@ -313,6 +313,7 @@ export function KnowledgeLibrary({
           dataset_name: source.display_name || source.id,
           auto_deploy: false,
           persona: distillPersona,
+          target_pairs: 100,
         }),
       });
       const data = await resp.json();

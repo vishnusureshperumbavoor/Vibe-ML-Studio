@@ -528,6 +528,7 @@ class TextDistillRequest(BaseModel):
     dataset_name: Optional[str] = None
     auto_deploy: bool = False
     persona: Optional[str] = None
+    target_pairs: int = 100
 
 class TextSourceRequest(BaseModel):
     name: Optional[str] = None
@@ -560,9 +561,10 @@ async def start_text_distillation(req: TextDistillRequest):
             dataset_name=dataset_name,
             auto_deploy=req.auto_deploy,
             persona=req.persona or "Generic",
+            target_pairs=req.target_pairs,
         )
     )
-    return {"status": "started", "dataset_name": dataset_name, "auto_deploy": req.auto_deploy, "persona": req.persona or "Generic"}
+    return {"status": "started", "dataset_name": dataset_name, "auto_deploy": req.auto_deploy, "persona": req.persona or "Generic", "target_pairs": req.target_pairs}
 
 @app.post("/text_sources")
 async def save_text_source(req: TextSourceRequest):

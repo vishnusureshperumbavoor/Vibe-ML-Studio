@@ -22,7 +22,7 @@ class VMLDistiller:
         self.status = {"step": step, "progress": progress, "current_task": task}
         print(f"[{step.upper()}] {progress}% - {task}")
 
-    def generate_alpaca_pairs(self, text_chunk: str, persona: str = "Standard Expert") -> List[Dict[str, str]]:
+    def generate_alpaca_pairs(self, text_chunk: str, persona: str = "Standard Expert", pairs_per_chunk: int = 5) -> List[Dict[str, str]]:
         """Calls Kimi API to generate instruction-response pairs from a chunk."""
         self.api_key = os.getenv("VITE_KIMI_API_KEY") or os.getenv("KIMI_API_KEY")
         if not self.api_key:
@@ -32,6 +32,8 @@ class VMLDistiller:
             role_description = "a highly accurate information extractor. Your goal is to extract neutral, factual instruction-response pairs that represent the core content of the document without any departmental bias."
         else:
             role_description = f"a {persona}. Your goal is to extract high-quality, diverse instruction-response pairs that represent the document through the specific lens and expertise of your role."
+
+        pairs_per_chunk = max(1, min(int(pairs_per_chunk or 5), 8))
 
         prompt = f"""
         You are {role_description}
@@ -44,7 +46,7 @@ class VMLDistiller:
         1. Output ONLY a valid JSON list of objects.
         2. Each object must have: "instruction", "input" (can be empty), and "output".
         3. Ensure instructions are specific and the outputs are factually grounded in the chunk.
-        4. Generate exactly 3-5 pairs depending on chunk density.
+        4. Generate exactly {pairs_per_chunk} pairs. Keep them non-duplicative and grounded in different details where possible.
         """
 
         headers = {
@@ -63,7 +65,7 @@ class VMLDistiller:
             response = requests.post(self.api_url, headers=headers, json=payload, timeout=60)
             if response.status_code == 429:
                 time.sleep(5) 
-                return self.generate_alpaca_pairs(text_chunk)
+                return self.generate_alpaca_pairs(text_chunk, persona=persona, pairs_per_chunk=pairs_per_chunk)
             
             response.raise_for_status()
             data = response.json()
@@ -105,7 +107,7 @@ class VMLDistiller:
                 start = max(end - chunk_overlap, start + 1)
         return [chunk for chunk in chunks if chunk]
 
-    async def distill_text(self, raw_text: str, dataset_name: str, auto_deploy: bool = False, persona: str = "Generic"):
+    async def distill_text(self, raw_text: str, dataset_name: str, auto_deploy: bool = False, persona: str = "Generic", target_pairs: int = 100):
         """Create an Alpaca JSONL dataset directly from pasted text, bypassing Chroma/RAG."""
         try:
             self.api_key = os.getenv("VITE_KIMI_API_KEY") or os.getenv("KIMI_API_KEY")
@@ -113,7 +115,11 @@ class VMLDistiller:
                 self.update_status("error", 0, "Missing KIMI_API_KEY. Add it to .env or Settings.")
                 return None
 
-            chunks = self.split_plain_text(raw_text)
+            target_pairs = max(1, min(int(target_pairs or 100), 500))
+            pairs_per_chunk = 5
+            desired_chunks = max(1, (target_pairs + pairs_per_chunk - 1) // pairs_per_chunk)
+            dynamic_chunk_size = max(250, min(2500, len((raw_text or "").strip()) // desired_chunks or 250))
+            chunks = self.split_plain_text(raw_text, chunk_size=dynamic_chunk_size, chunk_overlap=50)
             if not chunks:
                 self.update_status("error", 0, "No pasted text provided.")
                 return None
@@ -122,18 +128,29 @@ class VMLDistiller:
             if not safe_name:
                 safe_name = "pasted_text"
 
-            self.update_status("distilling", 10, f"Creating Alpaca dataset from pasted text: {safe_name}")
+            self.update_status("distilling", 10, f"Creating {target_pairs}-row Alpaca dataset from pasted text: {safe_name}")
             dataset = []
             total_chunks = len(chunks)
-            for i, chunk in enumerate(chunks):
-                progress = 10 + int((i / total_chunks) * 70)
-                self.update_status("distilling", progress, f"Synthesizing pasted text chunk {i + 1}/{total_chunks} as {persona}")
-                dataset.extend(self.generate_alpaca_pairs(chunk, persona=persona))
-                await asyncio.sleep(0.5)
+            round_idx = 0
+            max_rounds = 3
+            while len(dataset) < target_pairs and round_idx < max_rounds:
+                for i, chunk in enumerate(chunks):
+                    if len(dataset) >= target_pairs:
+                        break
+                    progress = min(80, 10 + int((len(dataset) / target_pairs) * 70))
+                    self.update_status(
+                        "distilling",
+                        progress,
+                        f"Synthesizing row batch {len(dataset) + 1}-{min(len(dataset) + pairs_per_chunk, target_pairs)} of {target_pairs} as {persona}",
+                    )
+                    dataset.extend(self.generate_alpaca_pairs(chunk, persona=persona, pairs_per_chunk=pairs_per_chunk))
+                    await asyncio.sleep(0.5)
+                round_idx += 1
 
             if not dataset:
                 self.update_status("error", 0, "No Alpaca pairs were generated from the pasted text.")
                 return None
+            dataset = dataset[:target_pairs]
 
             self.update_status("saving", 85, "Saving Alpaca JSONL dataset...")
             base_dir = os.path.dirname(os.path.abspath(__file__))
