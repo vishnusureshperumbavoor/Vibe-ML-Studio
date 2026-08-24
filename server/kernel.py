@@ -7,7 +7,6 @@ import uuid
 class KernelManager:
     def __init__(self):
         self.process = None
-        self.loop = asyncio.get_event_loop()
         self.marker = f"VML_END_OF_BLOCK_{uuid.uuid4().hex[:8]}"
 
     async def start(self):
