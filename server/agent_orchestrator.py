@@ -22,11 +22,7 @@ import rag_ingest
 # Load token
 load_dotenv()
 
-# Create the MCP Server instance
-server = Server("vml-huggingface")
-
-@server.list_tools()
-async def handle_list_tools() -> list[types.Tool]:
+def get_tools_list() -> list[types.Tool]:
     """List available Hugging Face tools via MCP."""
     return [
         types.Tool(
@@ -171,8 +167,7 @@ async def handle_list_tools() -> list[types.Tool]:
         )
     ]
 
-@server.call_tool()
-async def handle_call_tool(
+async def execute_tool(
     name: str, arguments: dict | None
 ) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
     """Handle tool execution requests via MCP."""
@@ -730,6 +725,20 @@ print("🏁 VML Quantization Pipeline Complete.")
             return [types.TextContent(type="text", text=f"❌ Image generation failed: {str(e)}")]
 
     raise ValueError(f"Unknown tool: {name}")
+
+async def handle_list_tools(ctx=None, params=None) -> types.ListToolsResult:
+    return types.ListToolsResult(tools=get_tools_list())
+
+async def handle_call_tool(ctx, params: types.CallToolRequestParams) -> types.CallToolResult:
+    content = await execute_tool(params.name, params.arguments or {})
+    return types.CallToolResult(content=content)
+
+# Create the MCP Server instance
+server = Server(
+    "vml-huggingface",
+    on_list_tools=handle_list_tools,
+    on_call_tool=handle_call_tool,
+)
 
 async def main():
     async with stdio_server() as (read_stream, write_stream):

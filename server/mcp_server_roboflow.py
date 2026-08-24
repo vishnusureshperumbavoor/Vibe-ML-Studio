@@ -46,10 +46,7 @@ def call_roboflow_inference(workspace: str, project: str, model: str, image_url:
     response.raise_for_status()
     return response.json()
 
-server = Server("vml-roboflow")
-
-@server.list_tools()
-async def list_tools() -> list[types.Tool]:
+def get_tools_list() -> list[types.Tool]:
     return [
         types.Tool(
             name="roboflow_infer",
@@ -68,8 +65,7 @@ async def list_tools() -> list[types.Tool]:
         ),
     ]
 
-@server.call_tool()
-async def call_tool(name: str, arguments: dict | None):
+async def execute_tool(name: str, arguments: dict | None):
     if name != "roboflow_infer":
         raise ValueError(f"Unknown tool: {name}")
 
@@ -91,6 +87,19 @@ async def call_tool(name: str, arguments: dict | None):
         return [types.TextContent(type="text", text=text)]
     except requests.HTTPError as exc:
         return [types.TextContent(type="text", text=f"Roboflow inference failed: {exc} - {exc.response.text}")]
+
+async def handle_list_tools(ctx=None, params=None) -> types.ListToolsResult:
+    return types.ListToolsResult(tools=get_tools_list())
+
+async def handle_call_tool(ctx, params: types.CallToolRequestParams) -> types.CallToolResult:
+    content = await execute_tool(params.name, params.arguments or {})
+    return types.CallToolResult(content=content)
+
+server = Server(
+    "vml-roboflow",
+    on_list_tools=handle_list_tools,
+    on_call_tool=handle_call_tool,
+)
 
 async def main():
     async with stdio_server() as (read_stream, write_stream):
