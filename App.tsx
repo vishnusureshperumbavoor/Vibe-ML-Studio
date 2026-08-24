@@ -311,17 +311,17 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
             prev.map((c) => (c.id === cellId ? { ...c, output: partial } : c)),
           );
         },
-        () => {},
+        () => { },
       );
 
       setCells((prev) =>
         prev.map((c) =>
           c.id === cellId
             ? {
-                ...c,
-                status: result.error ? "error" : "success",
-                output: result.error || result.text,
-              }
+              ...c,
+              status: result.error ? "error" : "success",
+              output: result.error || result.text,
+            }
             : c,
         ),
       );
@@ -448,10 +448,10 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
           prev.map((c) =>
             c.id === cellId
               ? {
-                  ...c,
-                  status: result.error ? "error" : "success",
-                  output: result.error || result.text,
-                }
+                ...c,
+                status: result.error ? "error" : "success",
+                output: result.error || result.text,
+              }
               : c,
           ),
         );
@@ -561,10 +561,10 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
               prev.map((c) =>
                 c.id === nextId
                   ? {
-                      ...c,
-                      status: retryResult.error ? "error" : "success",
-                      output: retryResult.error || retryResult.text,
-                    }
+                    ...c,
+                    status: retryResult.error ? "error" : "success",
+                    output: retryResult.error || retryResult.text,
+                  }
                   : c,
               ),
             );
@@ -677,10 +677,10 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
           prev.map((c) =>
             c.id === cellId
               ? {
-                  ...c,
-                  status: result.error ? "error" : "success",
-                  output: result.error || result.text,
-                }
+                ...c,
+                status: result.error ? "error" : "success",
+                output: result.error || result.text,
+              }
               : c,
           ),
         );
@@ -740,10 +740,10 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
       prev.map((c) =>
         c.id === cellId
           ? {
-              ...c,
-              status: result.error ? "error" : "success",
-              output: result.error || result.text,
-            }
+            ...c,
+            status: result.error ? "error" : "success",
+            output: result.error || result.text,
+          }
           : c,
       ),
     );
@@ -822,11 +822,11 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
         prev.map((connector) =>
           connector.id === id
             ? {
-                ...connector,
-                status: "error",
-                statusMessage: "URL is not set",
-                lastChecked: new Date().toLocaleTimeString(),
-              }
+              ...connector,
+              status: "error",
+              statusMessage: "URL is not set",
+              lastChecked: new Date().toLocaleTimeString(),
+            }
             : connector,
         ),
       );
@@ -844,11 +844,11 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
         prev.map((connector) =>
           connector.id === id
             ? {
-                ...connector,
-                status: "healthy",
-                statusMessage: `${data.tools?.length ?? 0} tools`,
-                lastChecked: new Date().toLocaleTimeString(),
-              }
+              ...connector,
+              status: "healthy",
+              statusMessage: `${data.tools?.length ?? 0} tools`,
+              lastChecked: new Date().toLocaleTimeString(),
+            }
             : connector,
         ),
       );
@@ -857,11 +857,11 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
         prev.map((connector) =>
           connector.id === id
             ? {
-                ...connector,
-                status: "error",
-                statusMessage: error?.message ?? "Connection failed",
-                lastChecked: new Date().toLocaleTimeString(),
-              }
+              ...connector,
+              status: "error",
+              statusMessage: error?.message ?? "Connection failed",
+              lastChecked: new Date().toLocaleTimeString(),
+            }
             : connector,
         ),
       );
@@ -909,11 +909,11 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
         prev.map((item) =>
           item.name === name
             ? {
-                ...item,
-                instructions,
-                summary: item.summary || summaryLine,
-                loadingInstructions: false,
-              }
+              ...item,
+              instructions,
+              summary: item.summary || summaryLine,
+              loadingInstructions: false,
+            }
             : item,
         ),
       );
@@ -922,12 +922,11 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
         prev.map((item) =>
           item.name === name
             ? {
-                ...item,
-                instructions: `Unable to load instructions: ${
-                  error?.message ?? "Unknown error"
+              ...item,
+              instructions: `Unable to load instructions: ${error?.message ?? "Unknown error"
                 }`,
-                loadingInstructions: false,
-              }
+              loadingInstructions: false,
+            }
             : item,
         ),
       );
@@ -1235,12 +1234,12 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
       prev.map((c) =>
         c.id === id
           ? {
-              ...c,
-              status: localResult.error ? "error" : "success",
-              output: localResult.error || localResult.text,
-              executionCount: (c.executionCount || 0) + 1,
-              lastRun: Date.now(),
-            }
+            ...c,
+            status: localResult.error ? "error" : "success",
+            output: localResult.error || localResult.text,
+            executionCount: (c.executionCount || 0) + 1,
+            lastRun: Date.now(),
+          }
           : c,
       ),
     );
@@ -1500,11 +1499,10 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
               variant="ghost"
               size="sm"
               onClick={() => setActiveView("knowledge")}
-              className={`gap-2 h-10 px-4 rounded-xl transition-all duration-300 border ${
-                activeView === "knowledge"
+              className={`gap-2 h-10 px-4 rounded-xl transition-all duration-300 border ${activeView === "knowledge"
                   ? "bg-indigo-500/20 text-indigo-200 border-indigo-500/40 shadow-[0_0_15px_rgba(99,102,241,0.15)]"
                   : "text-gray-400 border-transparent hover:bg-white/5"
-              }`}
+                }`}
             >
               <Database size={16} />
               <span className="text-xs font-semibold">Knowledge</span>
@@ -1513,11 +1511,10 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
               variant="ghost"
               size="sm"
               onClick={() => setActiveView("workflow")}
-              className={`gap-2 h-10 px-4 rounded-xl transition-all duration-300 border ${
-                activeView === "workflow"
+              className={`gap-2 h-10 px-4 rounded-xl transition-all duration-300 border ${activeView === "workflow"
                   ? "bg-amber-500/20 text-amber-200 border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
                   : "text-gray-400 border-transparent hover:bg-white/5"
-              }`}
+                }`}
             >
               <Activity size={16} />
               <span className="text-xs font-semibold">Build</span>
@@ -1526,11 +1523,10 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
               variant="ghost"
               size="sm"
               onClick={() => setActiveView("studio")}
-              className={`gap-2 h-10 px-4 rounded-xl transition-all duration-300 border ${
-                activeView === "studio"
+              className={`gap-2 h-10 px-4 rounded-xl transition-all duration-300 border ${activeView === "studio"
                   ? "bg-purple-500/20 text-purple-200 border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.15)]"
                   : "text-gray-400 border-transparent hover:bg-white/5"
-              }`}
+                }`}
             >
               <Terminal size={16} />
               <span className="text-xs font-semibold">Studio</span>
@@ -1539,11 +1535,10 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
               variant="ghost"
               size="sm"
               onClick={() => setActiveView("chat")}
-              className={`gap-2 h-10 px-4 rounded-xl transition-all duration-300 border ${
-                activeView === "chat"
+              className={`gap-2 h-10 px-4 rounded-xl transition-all duration-300 border ${activeView === "chat"
                   ? "bg-purple-500/20 text-purple-200 border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.15)]"
                   : "text-gray-400 border-transparent hover:bg-white/5"
-              }`}
+                }`}
             >
               <MessageSquare size={16} />
               <span className="text-xs font-semibold">Arena</span>
@@ -1552,14 +1547,13 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
               variant="ghost"
               size="sm"
               onClick={() => setActiveView("creative")}
-              className={`gap-2 h-10 px-4 rounded-xl transition-all duration-300 border ${
-                activeView === "creative"
+              className={`gap-2 h-10 px-4 rounded-xl transition-all duration-300 border ${activeView === "creative"
                   ? "bg-purple-500/20 text-purple-200 border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.15)]"
                   : "text-gray-400 border-transparent hover:bg-white/5"
-              }`}
+                }`}
             >
               <Sparkles size={16} />
-              <span className="text-xs font-semibold">Creative</span>
+              <span className="text-xs font-semibold">Image</span>
             </Button>
           </div>
 
@@ -1675,11 +1669,10 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
                 <div className="sticky top-0 z-30 flex justify-end pb-4 -mx-4 px-4 md:-mx-8 md:px-8 bg-gradient-to-b from-[#0B090F] via-[#0B090F] to-transparent pt-4 -mt-4 pointer-events-none">
                   <button
                     onClick={handleCopyAll}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-2xl border transition-all duration-300 pointer-events-auto shadow-2xl backdrop-blur-md ${
-                      wasCopyAllClicked
+                    className={`flex items-center gap-2 px-4 py-2 rounded-2xl border transition-all duration-300 pointer-events-auto shadow-2xl backdrop-blur-md ${wasCopyAllClicked
                         ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-emerald-500/10"
                         : "bg-[#140F1D]/80 border-white/10 text-white/40 hover:bg-[#140F1D] hover:border-white/20 hover:text-white"
-                    }`}
+                      }`}
                   >
                     {wasCopyAllClicked ? (
                       <CheckCircle2 size={14} />

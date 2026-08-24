@@ -96,23 +96,20 @@ export const CreativeStudio: React.FC<CreativeStudioProps> = ({ onGenerate, isGe
       {/* Header */}
       <div className="flex-none p-6 border-b border-[#352554] bg-[#140F1D]/50 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <div className="p-2.5 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl shadow-lg shadow-purple-500/20">
-            <Sparkles className="text-white" size={20} />
-          </div>
           <div>
-            <h2 className="text-lg font-bold text-white tracking-tight">Creative Studio</h2>
+            <h2 className="text-lg font-bold text-white tracking-tight">VML Image Generation</h2>
             <p className="text-[10px] text-purple-400/60 uppercase font-bold tracking-widest">Stable Diffusion 1.5</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex bg-[#1D152A] p-1 rounded-xl border border-[#352554]">
-            <button 
+            <button
               onClick={() => setMode('text2img')}
               className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${mode === 'text2img' ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/40' : 'text-gray-500 hover:text-gray-300'}`}
             >
               TXT2IMG
             </button>
-            <button 
+            <button
               onClick={() => setMode('img2img')}
               className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${mode === 'img2img' ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/40' : 'text-gray-500 hover:text-gray-300'}`}
             >
@@ -167,9 +164,9 @@ export const CreativeStudio: React.FC<CreativeStudioProps> = ({ onGenerate, isGe
 
           <div className="space-y-3">
             <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest flex items-center gap-2">
-              <Wand2 size={12} /> Positive Prompt
+              <Wand2 size={12} /> Prompt
             </label>
-            <textarea 
+            <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               placeholder="Describe the image you want to create..."
@@ -182,7 +179,7 @@ export const CreativeStudio: React.FC<CreativeStudioProps> = ({ onGenerate, isGe
               <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest flex items-center gap-2">
                 <Upload size={12} /> Base Image
               </label>
-              <div 
+              <div
                 onClick={() => fileInputRef.current?.click()}
                 className={`w-full aspect-video rounded-2xl border-2 border-dashed border-[#352554] bg-[#140F1D] flex flex-col items-center justify-center cursor-pointer hover:border-purple-500/30 transition-all overflow-hidden relative group`}
               >
@@ -204,12 +201,12 @@ export const CreativeStudio: React.FC<CreativeStudioProps> = ({ onGenerate, isGe
             </div>
           )}
 
-          <button 
+          <button
             onClick={handleSubmit}
             disabled={isGenerating || !prompt.trim() || (mode === 'img2img' && !baseImage)}
             className={`w-full py-4 rounded-2xl flex items-center justify-center gap-3 font-bold text-sm transition-all shadow-2xl scale-100 active:scale-95
               ${isGenerating || !prompt.trim() || (mode === 'img2img' && !baseImage)
-                ? 'bg-white/5 text-white/20 cursor-not-allowed border border-white/5' 
+                ? 'bg-white/5 text-white/20 cursor-not-allowed border border-white/5'
                 : 'bg-white text-black hover:bg-neutral-200 hover:shadow-white/10'}
             `}
           >
@@ -221,7 +218,7 @@ export const CreativeStudio: React.FC<CreativeStudioProps> = ({ onGenerate, isGe
             ) : (
               <>
                 <Play size={18} fill="currentColor" />
-                <span>GENERATE MAGIC</span>
+                <span>GENERATE IMAGE</span>
               </>
             )}
           </button>
@@ -231,7 +228,7 @@ export const CreativeStudio: React.FC<CreativeStudioProps> = ({ onGenerate, isGe
         <div className="flex-1 min-h-[400px] rounded-3xl bg-black/40 border border-[#352554] border-dashed flex flex-col items-center justify-center relative overflow-hidden group">
           {lastGeneratedImage ? (
             <div className="w-full h-full p-4 animate-in fade-in zoom-in-95 duration-700">
-               <RenderedImage source={lastGeneratedImage} />
+              <RenderedImage source={lastGeneratedImage} />
             </div>
           ) : (
             <div className="flex flex-col items-center text-center p-8 space-y-4 opacity-40 group-hover:opacity-60 transition-opacity">
@@ -249,26 +246,26 @@ export const CreativeStudio: React.FC<CreativeStudioProps> = ({ onGenerate, isGe
 
           {/* Background Decorative elements */}
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-purple-900/10 via-transparent to-transparent pointer-events-none" />
-          
+
           <div className="absolute top-6 right-6 flex gap-2">
-             <div className="px-3 py-1.5 bg-black/60 backdrop-blur-md rounded-xl border border-white/5 flex items-center gap-2">
-                {modelStatus === 'ready' ? (
-                  <>
-                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="text-[9px] font-bold text-emerald-400 tracking-widest uppercase">Model Ready</span>
-                  </>
-                ) : modelStatus === 'downloading' ? (
-                  <>
-                    <Loader2 size={10} className="animate-spin text-amber-400" />
-                    <span className="text-[9px] font-bold text-amber-400 tracking-widest uppercase">Downloading...</span>
-                  </>
-                ) : (
-                  <>
-                    <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                    <span className="text-[9px] font-bold text-amber-400/80 tracking-widest uppercase">Not Downloaded</span>
-                  </>
-                )}
-             </div>
+            <div className="px-3 py-1.5 bg-black/60 backdrop-blur-md rounded-xl border border-white/5 flex items-center gap-2">
+              {modelStatus === 'ready' ? (
+                <>
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-[9px] font-bold text-emerald-400 tracking-widest uppercase">Model Ready</span>
+                </>
+              ) : modelStatus === 'downloading' ? (
+                <>
+                  <Loader2 size={10} className="animate-spin text-amber-400" />
+                  <span className="text-[9px] font-bold text-amber-400 tracking-widest uppercase">Downloading...</span>
+                </>
+              ) : (
+                <>
+                  <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                  <span className="text-[9px] font-bold text-amber-400/80 tracking-widest uppercase">Not Downloaded</span>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>

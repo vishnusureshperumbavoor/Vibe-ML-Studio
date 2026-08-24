@@ -1,4 +1,5 @@
 import {
+  Download,
   MessageSquare,
   Send,
   User,
@@ -66,6 +67,12 @@ const renderMessageList = (
   stopStream: () => void,
   setActiveEvidence: (e: any[]) => void,
   setIsEvidenceOpen: (o: boolean) => void,
+  hasModels: boolean = true,
+  onDownloadQwen?: () => void,
+  qwenStatus?: string,
+  isDownloadingQwen?: boolean,
+  qwenMessage?: string,
+  qwenProgress?: number,
 ) => {
   return (
     <div
@@ -79,7 +86,65 @@ const renderMessageList = (
         <div
           className={`max-w-3xl mx-auto px-6 space-y-10 ${messages.length === 0 ? "h-full flex items-center justify-center" : "py-12"}`}
         >
-          {messages.length === 0 ? (
+          {!hasModels ? (
+            <div className="flex flex-col items-center justify-center text-center space-y-6 max-w-md mx-auto p-8 rounded-3xl bg-gradient-to-b from-[#140F1D] to-[#0B090F] border border-purple-500/20 shadow-2xl animate-in fade-in duration-500">
+              <div className="p-4 bg-purple-500/10 border border-purple-500/30 rounded-2xl text-purple-400 shadow-lg shadow-purple-500/10">
+                <Bot size={40} />
+              </div>
+              <div>
+                <div className="flex items-center justify-center gap-2">
+                  <h3 className="text-lg font-bold text-white tracking-tight">Qwen2 0.5B Instruct</h3>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    ~379 MB
+                  </span>
+                </div>
+                <p className="text-xs text-white/50 mt-2 leading-relaxed">
+                  Ultra-fast, lightweight starter model. Download to immediately chat, benchmark, and test in the Arena.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 text-[10px] text-white/40 font-mono">
+                <span>Qwen/Qwen2-0.5B</span> • <span>32K Context</span> • <span>Q4_K_M GGUF</span>
+              </div>
+
+              {qwenStatus === 'downloading' ? (
+                <div className="w-full space-y-2.5 p-3 rounded-2xl bg-black/40 border border-purple-500/30">
+                  <div className="flex justify-between items-center text-[11px] font-bold">
+                    <span className="text-purple-300 font-mono truncate mr-2">{qwenMessage || "Downloading..."}</span>
+                    <span className="text-amber-400 font-mono flex-none">{qwenProgress || 0}%</span>
+                  </div>
+                  <div className="w-full h-3 bg-black/60 rounded-full border border-purple-500/20 overflow-hidden relative shadow-inner p-0.5">
+                    <div
+                      className="h-full bg-gradient-to-r from-purple-500 via-indigo-500 to-amber-400 rounded-full transition-all duration-300 shadow-[0_0_12px_rgba(168,85,247,0.5)]"
+                      style={{ width: `${Math.max(qwenProgress || 0, 3)}%` }}
+                    />
+                  </div>
+                </div>
+              ) : qwenMessage ? (
+                <div className="w-full text-[11px] text-amber-300 font-mono bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/20">
+                  {qwenMessage}
+                </div>
+              ) : null}
+
+              <button
+                onClick={onDownloadQwen}
+                disabled={qwenStatus === 'downloading' || isDownloadingQwen}
+                className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:from-purple-900/50 disabled:to-indigo-900/50 text-white font-bold text-xs transition-all shadow-xl shadow-purple-900/30 flex items-center justify-center gap-2 scale-100 active:scale-95 cursor-pointer"
+              >
+                {qwenStatus === 'downloading' || isDownloadingQwen ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>Downloading Qwen2 0.5B (~379 MB)...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download size={16} />
+                    <span>Download & Test Qwen2 0.5B</span>
+                  </>
+                )}
+              </button>
+            </div>
+          ) : messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center text-center space-y-8 opacity-60 animate-in fade-in zoom-in duration-700">
               <div className="p-8 bg-purple-500/5 border border-purple-500/10 rounded-[2.5rem] shadow-2xl shadow-purple-500/5">
                 <Sparkles size={64} className="text-purple-400/50" />
@@ -264,6 +329,64 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   // Filter list to only show Native (llama-cpp-python) models as requested
   const allModels = nativeModels;
+
+  // Qwen2 0.5B Download & Status State
+  const [qwenStatus, setQwenStatus] = useState<'idle' | 'downloading' | 'ready' | 'error'>('idle');
+  const [qwenMessage, setQwenMessage] = useState<string>('');
+  const [qwenProgress, setQwenProgress] = useState<number>(0);
+  const [isDownloadingQwen, setIsDownloadingQwen] = useState(false);
+
+  const checkQwenStatus = async () => {
+    try {
+      const res = await fetch("http://127.0.0.1:2000/models/gguf_status?filename=qwen2-0_5b-instruct-q4_k_m.gguf");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.is_present || data.status === 'ready') {
+          setQwenStatus('ready');
+          setQwenProgress(100);
+          fetchNativeModels();
+        } else if (data.status === 'downloading') {
+          setQwenStatus('downloading');
+          if (typeof data.progress === 'number') {
+            setQwenProgress(data.progress);
+          }
+        } else if (data.status === 'error') {
+          setQwenStatus('error');
+        }
+        if (data.message) setQwenMessage(data.message);
+      }
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    checkQwenStatus();
+    const pollInterval = qwenStatus === 'downloading' ? 1000 : 2500;
+    const interval = setInterval(checkQwenStatus, pollInterval);
+    return () => clearInterval(interval);
+  }, [qwenStatus]);
+
+  const handleDownloadQwen = async () => {
+    setIsDownloadingQwen(true);
+    setQwenStatus('downloading');
+    try {
+      const formData = new FormData();
+      formData.append('repo_id', 'Qwen/Qwen2-0.5B-Instruct-GGUF');
+      formData.append('filename', 'qwen2-0_5b-instruct-q4_k_m.gguf');
+      const res = await fetch("http://127.0.0.1:2000/models/download_gguf", {
+        method: "POST",
+        body: formData
+      });
+      if (res.ok) {
+        setQwenStatus('downloading');
+        setQwenMessage('Downloading Qwen2 0.5B from Hugging Face (~379 MB)...');
+      }
+    } catch (e) {
+      setQwenStatus('error');
+      setQwenMessage('Failed to start download.');
+    } finally {
+      setIsDownloadingQwen(false);
+    }
+  };
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [reportCopied, setReportCopied] = useState(false);
 
@@ -756,6 +879,26 @@ ${assistantMsg.content}`;
             <ChevronDown size={14} />
           </div>
         </div>
+        {allModels.length === 0 && (
+          <button
+            onClick={handleDownloadQwen}
+            disabled={qwenStatus === 'downloading' || isDownloadingQwen}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-600/20 border border-purple-500/30 text-purple-300 text-xs font-bold hover:bg-purple-600/30 transition-all cursor-pointer"
+            title="Download Qwen2 0.5B starter model"
+          >
+            {qwenStatus === 'downloading' || isDownloadingQwen ? (
+              <>
+                <Loader2 size={12} className="animate-spin" />
+                <span>Downloading...</span>
+              </>
+            ) : (
+              <>
+                <Download size={12} />
+                <span>Download Qwen2 0.5B (~379 MB)</span>
+              </>
+            )}
+          </button>
+        )}
 
         {isOnnx && selectedObj && (
           <div className="flex items-center gap-2">
@@ -904,6 +1047,12 @@ ${assistantMsg.content}`;
           },
           setActiveEvidence,
           setIsEvidenceOpen,
+          allModels.length > 0,
+          handleDownloadQwen,
+          qwenStatus,
+          isDownloadingQwen,
+          qwenMessage,
+          qwenProgress,
         )}
 
         {isSplitMode && (
@@ -923,6 +1072,11 @@ ${assistantMsg.content}`;
                 },
                 setActiveEvidence,
                 setIsEvidenceOpen,
+                allModels.length > 0,
+                handleDownloadQwen,
+                qwenStatus,
+                isDownloadingQwen,
+                qwenMessage,
               )}
             </div>
           </>

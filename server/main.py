@@ -401,6 +401,122 @@ async def native_chat(req: NativeChatRequest):
     return StreamingResponse(chat_generator(), media_type="text/event-stream")
 
 
+
+# --- GGUF Model Downloader Endpoints ---
+import requests
+import threading
+
+gguf_download_state = {
+    "status": "idle",
+    "filename": "qwen2-0_5b-instruct-q4_k_m.gguf",
+    "repo_id": "Qwen/Qwen2-0.5B-Instruct-GGUF",
+    "progress": 0,
+    "downloaded_mb": 0,
+    "total_mb": 0,
+    "message": ""
+}
+_gguf_download_lock = threading.Lock()
+
+def _gguf_download_worker(repo_id: str, filename: str):
+    global gguf_download_state
+    temp_path = os.path.join(GGUF_DIR, f"{filename}.downloading")
+    target_path = os.path.join(GGUF_DIR, filename)
+    try:
+        if not os.path.exists(GGUF_DIR):
+            os.makedirs(GGUF_DIR, exist_ok=True)
+            
+        url = f"https://huggingface.co/{repo_id}/resolve/main/{filename}"
+        headers = {}
+        hf_token = os.getenv("HF_TOKEN")
+        if hf_token:
+            headers["Authorization"] = f"Bearer {hf_token}"
+            
+        print(f"📥 Starting streaming download: {url} -> {target_path}")
+        response = requests.get(url, headers=headers, stream=True, timeout=60, allow_redirects=True)
+        response.raise_for_status()
+        
+        total_size = int(response.headers.get("content-length", 0))
+        downloaded = 0
+        chunk_size = 1024 * 1024  # 1MB chunk
+        
+        with open(temp_path, "wb") as f:
+            for chunk in response.iter_content(chunk_size=chunk_size):
+                if chunk:
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    percent = round((downloaded / total_size) * 100, 1) if total_size > 0 else 0
+                    downloaded_mb = round(downloaded / (1024 * 1024), 1)
+                    total_mb = round(total_size / (1024 * 1024), 1)
+                    
+                    with _gguf_download_lock:
+                        gguf_download_state["status"] = "downloading"
+                        gguf_download_state["progress"] = percent
+                        gguf_download_state["downloaded_mb"] = downloaded_mb
+                        gguf_download_state["total_mb"] = total_mb
+                        gguf_download_state["message"] = f"{downloaded_mb} MB / {total_mb} MB ({percent}%)"
+                        
+        if os.path.exists(temp_path):
+            os.replace(temp_path, target_path)
+            
+        with _gguf_download_lock:
+            gguf_download_state["status"] = "ready"
+            gguf_download_state["progress"] = 100
+            gguf_download_state["message"] = f"{filename} downloaded successfully!"
+        print(f"✅ Download complete: {target_path}")
+    except Exception as e:
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except Exception:
+                pass
+        with _gguf_download_lock:
+            gguf_download_state["status"] = "error"
+            gguf_download_state["message"] = f"Download failed: {str(e)}"
+        print(f"❌ Download error for {filename}: {e}")
+
+@app.get("/models/gguf_status")
+async def get_gguf_status(filename: Optional[str] = "qwen2-0_5b-instruct-q4_k_m.gguf"):
+    target_path = os.path.join(GGUF_DIR, filename)
+    is_present = os.path.exists(target_path)
+    with _gguf_download_lock:
+        status = "ready" if is_present else gguf_download_state.get("status", "idle")
+        if gguf_download_state.get("status") == "downloading" and not is_present:
+            status = "downloading"
+        return {
+            "filename": filename,
+            "is_present": is_present,
+            "status": status,
+            "progress": gguf_download_state.get("progress", 0),
+            "downloaded_mb": gguf_download_state.get("downloaded_mb", 0),
+            "total_mb": gguf_download_state.get("total_mb", 0),
+            "message": gguf_download_state.get("message", "")
+        }
+
+@app.post("/models/download_gguf")
+async def download_gguf_model(
+    repo_id: Optional[str] = Form("Qwen/Qwen2-0.5B-Instruct-GGUF"),
+    filename: Optional[str] = Form("qwen2-0_5b-instruct-q4_k_m.gguf")
+):
+    global gguf_download_state
+    target_path = os.path.join(GGUF_DIR, filename)
+    if os.path.exists(target_path):
+        return {"status": "ready", "message": f"{filename} already exists locally."}
+
+    with _gguf_download_lock:
+        if gguf_download_state["status"] == "downloading":
+            return {"status": "already_downloading", "message": "Download is already in progress."}
+        gguf_download_state["status"] = "downloading"
+        gguf_download_state["repo_id"] = repo_id
+        gguf_download_state["filename"] = filename
+        gguf_download_state["progress"] = 0
+        gguf_download_state["downloaded_mb"] = 0
+        gguf_download_state["total_mb"] = 0
+        gguf_download_state["message"] = f"Starting download of {filename}..."
+
+    thread = threading.Thread(target=_gguf_download_worker, args=(repo_id, filename), daemon=True)
+    thread.start()
+    return {"status": "started", "message": f"Download of {filename} started in background."}
+
 @app.get("/list_native_models")
 async def list_native_models():
     """
