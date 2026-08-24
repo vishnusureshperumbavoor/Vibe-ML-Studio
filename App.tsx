@@ -43,6 +43,7 @@ import { QuantizationPanel } from "./components/QuantizationPanel";
 import { BenchmarkPanel } from "./components/BenchmarkPanel";
 import { OnnxPanel } from "./components/OnnxPanel";
 import { CreativeStudio } from "./components/CreativeStudio";
+import { VisionPanel } from "./components/VisionPanel";
 
 const API_BASE = "http://127.0.0.1:2000";
 
@@ -151,7 +152,7 @@ export default function App() {
     "studio" | "chat" | "workflow" | "knowledge" | "creative"
   >("chat");
   const [workflowMode, setWorkflowMode] = useState<
-    "quantize" | "finetune" | "evaluate" | "onnx"
+    "quantize" | "finetune" | "evaluate" | "onnx" | "vision"
   >("finetune");
   const [isWorkflowExecuting, setIsWorkflowExecuting] = useState(false);
   const [deploymentUrl, setDeploymentUrl] = useState<string | null>(null);
@@ -1656,6 +1657,10 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
                 <OnnxPanel
                   onStart={handleStartOnnx}
                   isExecuting={isWorkflowExecuting}
+                />
+              ) : workflowMode === "vision" ? (
+                <VisionPanel
+                  onNavigateToCreative={() => setActiveView("creative")}
                 />
               ) : (
                 <BenchmarkPanel systemInfo={systemInfo} />

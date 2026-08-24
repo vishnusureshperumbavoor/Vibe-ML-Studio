@@ -1,6 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { Image as ImageIcon, Wand2, Sliders, Upload, Play, Sparkles, RefreshCw, X, ChevronRight, Layers } from 'lucide-react';
-import { Button } from './Button';
+import React, { useState, useRef, useEffect } from 'react';
+import { Sparkles, Wand2, Play, Image as ImageIcon, Upload, RefreshCw, Download, CheckCircle2, Loader2, AlertCircle, HardDrive } from 'lucide-react';
 import { RenderedImage } from './RenderedImage';
 
 interface CreativeStudioProps {
@@ -17,6 +16,59 @@ export const CreativeStudio: React.FC<CreativeStudioProps> = ({ onGenerate, isGe
   const [baseImage, setBaseImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Model status & download state
+  const [modelStatus, setModelStatus] = useState<'idle' | 'downloading' | 'ready' | 'error'>('idle');
+  const [statusMessage, setStatusMessage] = useState<string>('');
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  const checkModelStatus = async () => {
+    try {
+      const res = await fetch('http://127.0.0.1:2000/image/status?model_id=stable-diffusion-v1-5/stable-diffusion-v1-5');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.is_downloaded || data.status === 'ready') {
+          setModelStatus('ready');
+        } else if (data.status === 'downloading') {
+          setModelStatus('downloading');
+        } else if (data.status === 'error') {
+          setModelStatus('error');
+        } else {
+          setModelStatus('idle');
+        }
+        if (data.message) setStatusMessage(data.message);
+      }
+    } catch (e) {
+      // Backend not reached
+    }
+  };
+
+  useEffect(() => {
+    checkModelStatus();
+    const interval = setInterval(checkModelStatus, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleDownloadModel = async () => {
+    setIsDownloading(true);
+    try {
+      const formData = new FormData();
+      formData.append('model_id', 'stable-diffusion-v1-5/stable-diffusion-v1-5');
+      const res = await fetch('http://127.0.0.1:2000/image/download', {
+        method: 'POST',
+        body: formData
+      });
+      if (res.ok) {
+        setModelStatus('downloading');
+        setStatusMessage('Downloading Stable Diffusion 1.5 weights from Hugging Face...');
+      }
+    } catch (e) {
+      setModelStatus('error');
+      setStatusMessage('Failed to trigger download.');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -49,28 +101,70 @@ export const CreativeStudio: React.FC<CreativeStudioProps> = ({ onGenerate, isGe
           </div>
           <div>
             <h2 className="text-lg font-bold text-white tracking-tight">Creative Studio</h2>
-            <p className="text-[10px] text-purple-400/60 uppercase font-bold tracking-widest">OpenVINO • Stable Diffusion 1.5</p>
+            <p className="text-[10px] text-purple-400/60 uppercase font-bold tracking-widest">Stable Diffusion 1.5</p>
           </div>
         </div>
-        <div className="flex bg-[#1D152A] p-1 rounded-xl border border-[#352554]">
-          <button 
-            onClick={() => setMode('text2img')}
-            className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${mode === 'text2img' ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/40' : 'text-gray-500 hover:text-gray-300'}`}
-          >
-            TXT2IMG
-          </button>
-          <button 
-            onClick={() => setMode('img2img')}
-            className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${mode === 'img2img' ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/40' : 'text-gray-500 hover:text-gray-300'}`}
-          >
-            IMG2IMG
-          </button>
+        <div className="flex items-center gap-3">
+          <div className="flex bg-[#1D152A] p-1 rounded-xl border border-[#352554]">
+            <button 
+              onClick={() => setMode('text2img')}
+              className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${mode === 'text2img' ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/40' : 'text-gray-500 hover:text-gray-300'}`}
+            >
+              TXT2IMG
+            </button>
+            <button 
+              onClick={() => setMode('img2img')}
+              className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${mode === 'img2img' ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/40' : 'text-gray-500 hover:text-gray-300'}`}
+            >
+              IMG2IMG
+            </button>
+          </div>
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 flex flex-col md:flex-row gap-8">
         {/* Left Column: Settings */}
-        <div className="w-full md:w-[400px] space-y-8 shrink-0">
+        <div className="w-full md:w-[400px] space-y-6 shrink-0">
+          {/* Download Banner if model is not ready */}
+          {modelStatus !== 'ready' && (
+            <div className="p-5 rounded-2xl bg-gradient-to-b from-[#1E1428] to-[#140F1D] border border-purple-500/30 space-y-3 shadow-xl shadow-purple-950/30 animate-in fade-in duration-300">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <HardDrive size={15} className="text-purple-400" />
+                  <span className="text-xs font-bold text-white tracking-tight">Model Required (~4.2 GB)</span>
+                </div>
+                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                  SD 1.5
+                </span>
+              </div>
+              <p className="text-[11px] text-white/50 leading-relaxed">
+                Download the Stable Diffusion 1.5 checkpoint to your local machine for fast GPU/CPU generation.
+              </p>
+              {statusMessage && (
+                <div className="text-[10px] text-amber-300 font-mono bg-amber-500/10 p-2 rounded-lg border border-amber-500/20">
+                  {statusMessage}
+                </div>
+              )}
+              <button
+                onClick={handleDownloadModel}
+                disabled={modelStatus === 'downloading' || isDownloading}
+                className="w-full py-3 px-4 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:bg-purple-900/50 text-white text-xs font-bold transition-all shadow-lg shadow-purple-900/30 flex items-center justify-center gap-2"
+              >
+                {modelStatus === 'downloading' || isDownloading ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>Downloading from Hugging Face...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download size={14} />
+                    <span>Download Stable Diffusion 1.5</span>
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+
           <div className="space-y-3">
             <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest flex items-center gap-2">
               <Wand2 size={12} /> Positive Prompt
@@ -110,8 +204,6 @@ export const CreativeStudio: React.FC<CreativeStudioProps> = ({ onGenerate, isGe
             </div>
           )}
 
-          {/* Vibe UI removed as per user request. Using realistic default (7.5) internally. */}
-
           <button 
             onClick={handleSubmit}
             disabled={isGenerating || !prompt.trim() || (mode === 'img2img' && !baseImage)}
@@ -124,7 +216,7 @@ export const CreativeStudio: React.FC<CreativeStudioProps> = ({ onGenerate, isGe
             {isGenerating ? (
               <>
                 <div className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
-                <span>GENERATING ON GPU...</span>
+                <span>GENERATING ON GPU/CPU...</span>
               </>
             ) : (
               <>
@@ -149,7 +241,7 @@ export const CreativeStudio: React.FC<CreativeStudioProps> = ({ onGenerate, isGe
               <div>
                 <h3 className="text-sm font-bold text-white uppercase tracking-widest">VML Canvas</h3>
                 <p className="text-xs text-gray-500 max-w-xs mx-auto mt-2 italic leading-relaxed">
-                  Your local GPU is idling. Enter a prompt on the left to materialize an image from the latent space.
+                  Enter a prompt on the left to materialize an image from the latent space.
                 </p>
               </div>
             </div>
@@ -159,9 +251,23 @@ export const CreativeStudio: React.FC<CreativeStudioProps> = ({ onGenerate, isGe
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-purple-900/10 via-transparent to-transparent pointer-events-none" />
           
           <div className="absolute top-6 right-6 flex gap-2">
-             <div className="px-3 py-1 bg-black/60 backdrop-blur-md rounded-lg border border-white/5 flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-[9px] font-bold text-white/60 tracking-widest uppercase">Iris Xe Ready</span>
+             <div className="px-3 py-1.5 bg-black/60 backdrop-blur-md rounded-xl border border-white/5 flex items-center gap-2">
+                {modelStatus === 'ready' ? (
+                  <>
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-[9px] font-bold text-emerald-400 tracking-widest uppercase">Model Ready</span>
+                  </>
+                ) : modelStatus === 'downloading' ? (
+                  <>
+                    <Loader2 size={10} className="animate-spin text-amber-400" />
+                    <span className="text-[9px] font-bold text-amber-400 tracking-widest uppercase">Downloading...</span>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                    <span className="text-[9px] font-bold text-amber-400/80 tracking-widest uppercase">Not Downloaded</span>
+                  </>
+                )}
              </div>
           </div>
         </div>

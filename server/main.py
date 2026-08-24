@@ -283,6 +283,22 @@ async def get_image(filename: str):
     return FileResponse(file_path)
 
 # --- Image Generation Endpoints ---
+# --- Image Status & Download Endpoints ---
+@app.get("/image/status")
+async def get_image_model_status(model_id: Optional[str] = "stable-diffusion-v1-5/stable-diffusion-v1-5"):
+    try:
+        return image_service.get_status(model_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/image/download")
+async def download_image_model(model_id: Optional[str] = Form("stable-diffusion-v1-5/stable-diffusion-v1-5")):
+    try:
+        res = image_service.start_background_download(model_id)
+        return res
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 from image_service import image_service
 import base64
 from io import BytesIO
