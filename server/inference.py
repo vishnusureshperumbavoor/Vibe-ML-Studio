@@ -43,6 +43,10 @@ class NativeInferenceManager:
             adapter_gguf = os.path.join(lora_path, "adapter.gguf")
             if os.path.exists(adapter_gguf):
                 return adapter_gguf
+            # Check for any model-named GGUF files in directory
+            for f in os.listdir(lora_path):
+                if f.endswith(".gguf"):
+                    return os.path.join(lora_path, f)
             # Auto-convert if converter exists
             converter_script = os.path.join(lora_path, "vml_converter_engine.py")
             if os.path.exists(converter_script):

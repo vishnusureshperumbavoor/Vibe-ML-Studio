@@ -479,10 +479,11 @@ print(f"Converter engine provisioned at: {{vml_script_path}}")
 """,
             f"""# Block 5.2: Isolated GGUF Conversion
 import sys, subprocess
-vml_out = os.path.join(output_dir, "adapter.gguf")
+vml_out = os.path.join(output_dir, f"{model_slug}-adapter.gguf")
 vml_script = os.path.join(output_dir, "vml_converter_engine.py")
 print("--- Launching Isolated Conversion ---")
 subprocess.run([sys.executable, vml_script, output_dir, vml_out], check=True)
+print(f"Model GGUF created: {{vml_out}}")
 """,
             f"""# Block 6: VML Agentic Handoff
 import json

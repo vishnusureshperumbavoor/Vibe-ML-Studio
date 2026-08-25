@@ -73,9 +73,9 @@ Fine-tuned LoRA domain model trained on **{dataset_id}** for **{epochs} epochs**
 - **Inference Engine**: VML Arena, PEFT / Transformers, llama.cpp / GGUF
 
 ## 🛠️ Files Included
-- `adapter_model.safetensors`: Low-rank weight matrices.
+- `adapter_model.safetensors`: Low-rank weight matrices (PyTorch / PEFT).
 - `adapter_config.json`: PEFT configuration for standard Hugging Face loaders.
-- `adapter.gguf`: Quantized format for 1-click local native execution in VML Studio & llama.cpp.
+- `{repo_id.split('/')[-1]}-adapter.gguf`: Quantized format for 1-click local native execution in VML Studio & llama.cpp.
 
 ## 💻 Quickstart Inference (Python / PEFT)
 ```python
@@ -189,6 +189,19 @@ def upload_to_hf(path: str, repo_slug: str, base_model: str = "Unknown", dataset
                     json.dump(cfg_json, cf, indent=2)
             except Exception as e:
                 print(f"adapter_config.json sanitize note: {e}")
+
+        # Ensure ONLY 1 clean model-named GGUF file exists for the upload
+        adapter_gguf_path = os.path.join(path, "adapter.gguf")
+        named_gguf_name = f"{clean_slug}-adapter.gguf"
+        named_gguf_path = os.path.join(path, named_gguf_name)
+        if os.path.exists(adapter_gguf_path):
+            try:
+                if not os.path.exists(named_gguf_path):
+                    os.rename(adapter_gguf_path, named_gguf_path)
+                else:
+                    os.remove(adapter_gguf_path)
+            except Exception as e:
+                print(f"Named GGUF rename note: {e}")
 
     # Generate / Overwrite Model Card (README.md) with valid HF base model
     print(f"Generating Model Card for {valid_hf_base}...")
