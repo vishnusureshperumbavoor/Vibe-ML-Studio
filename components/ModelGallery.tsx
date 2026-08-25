@@ -21,6 +21,7 @@ import {
   Lock,
   Check,
   Copy,
+  X,
 } from "lucide-react";
 import { ChatView } from "./ChatView";
 import { HUB_RECOMMENDED_MODELS } from "../constants";
@@ -34,6 +35,7 @@ export interface GalleryModelItem {
   onnx_slug?: string;
   base_model?: string;
   lora_rank?: number;
+  epochs?: number;
   dataset_id?: string;
   size_mb?: number;
   created_at?: number;
@@ -79,8 +81,10 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
   const [isHfAuthenticated, setIsHfAuthenticated] = useState<boolean | null>(null);
   const [hfAuthError, setHfAuthError] = useState<string | null>(null);
   const [customRepoName, setCustomRepoName] = useState<string>("");
+  const [uploadEpochs, setUploadEpochs] = useState<number>(300);
   const [isPrivateRepo, setIsPrivateRepo] = useState<boolean>(false);
   const [createSpace, setCreateSpace] = useState<boolean>(true);
+  const [confirmDeployment, setConfirmDeployment] = useState<boolean>(false);
   const [isUploadingHf, setIsUploadingHf] = useState<boolean>(false);
   const [hfUploadError, setHfUploadError] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
@@ -95,6 +99,18 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
       setActiveChatModel(initialSelectedModel);
     }
   }, [initialSelectedModel]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && modelToUpload && !isUploadingHf) {
+        setModelToUpload(null);
+        setHfUploadError(null);
+        setConfirmDeployment(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [modelToUpload, isUploadingHf]);
 
   const checkHfAuth = async () => {
     try {
@@ -118,9 +134,25 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
 
   const handleOpenUploadModal = (model: GalleryModelItem) => {
     setModelToUpload(model);
-    setCustomRepoName(model.lora_slug || model.name.replace(/[^a-zA-Z0-9-_]/g, "-"));
+    
+    // Strip redundant base model prefixes like qwen2-0-5b-, bonsai-1-7b-, etc.
+    let cleanSlug = (model.lora_slug || model.name)
+      .replace(/^Fine-tuned:\s*/i, "")
+      .toLowerCase()
+      .replace(/^qwen2-0-5b-|^qwen2-0_5b-|^qwen2-1-5b-|^qwen2-7b-|^qwen2-|^qwen-|^bonsai-1-7b-|^bonsai-|^smollm-135m-|^smollm-|^phi-3-mini-|^phi-3-/, "")
+      .replace(/-vml\d*$/i, "")
+      .replace(/[^a-z0-9-_]/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "");
+    
+    const defaultEpochs = model.epochs || 300;
+    const initialRepo = cleanSlug ? `${cleanSlug}-${defaultEpochs}ep` : `custom-adapter-${defaultEpochs}ep`;
+    
+    setCustomRepoName(initialRepo);
+    setUploadEpochs(defaultEpochs);
     setHfUploadError(null);
     setHfUploadSuccess(null);
+    setConfirmDeployment(false);
     setIsUploadingHf(false);
     checkHfAuth();
   };
@@ -137,6 +169,7 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
         body: JSON.stringify({
           lora_slug: modelToUpload.lora_slug,
           repo_name: customRepoName.trim() || modelToUpload.lora_slug,
+          epochs: uploadEpochs,
           is_private: isPrivateRepo,
           create_space: createSpace,
         }),
@@ -710,6 +743,11 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
                           Rank: <span className="font-semibold">{model.lora_rank}</span>
                         </div>
                       )}
+                      {model.epochs && (
+                        <div className="px-2.5 py-1 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-300">
+                          Epochs: <span className="font-semibold">{model.epochs}</span>
+                        </div>
+                      )}
                       {model.quantization && (
                         <div className="px-2.5 py-1 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-300">
                           Quant: <span className="font-semibold">{model.quantization}</span>
@@ -827,8 +865,20 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
 
       {/* Push to Hugging Face Modal */}
       {modelToUpload && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="w-full max-w-lg bg-[#140F1D] border border-amber-500/30 rounded-3xl p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+        <div
+          onClick={() => {
+            if (!isUploadingHf) {
+              setModelToUpload(null);
+              setHfUploadError(null);
+              setConfirmDeployment(false);
+            }
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200 cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg bg-[#140F1D] border border-amber-500/30 rounded-3xl p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto cursor-default"
+          >
             {/* Header */}
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <div className="flex items-center gap-3">
@@ -847,6 +897,22 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
                   </p>
                 </div>
               </div>
+
+              {/* Close Button */}
+              <button
+                onClick={() => {
+                  if (!isUploadingHf) {
+                    setModelToUpload(null);
+                    setHfUploadError(null);
+                    setConfirmDeployment(false);
+                  }
+                }}
+                disabled={isUploadingHf}
+                className="p-2 rounded-xl text-white/40 hover:text-white hover:bg-white/10 transition-all cursor-pointer disabled:opacity-40"
+                title="Close"
+              >
+                <X size={18} />
+              </button>
             </div>
 
             {/* Hugging Face Auth Banner */}
@@ -955,41 +1021,66 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
             ) : (
               /* Config & Upload Form */
               <div className="space-y-4">
-                {/* Repo Slug Name */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-white/80 flex items-center justify-between">
-                    <span>Repository Name</span>
-                    <span className="text-[10px] text-white/40 font-mono">
-                      Target: {hfUsername || "username"}/{customRepoName.toLowerCase().replace(/[^a-z0-9-_]/g, "-")}-vml
-                    </span>
-                  </label>
-                  <div className="relative">
+                {/* Repo Slug Name & Epochs Row */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="sm:col-span-2 space-y-1.5">
+                    <label className="text-xs font-bold text-white/80">
+                      <span>Repository Name</span>
+                    </label>
                     <input
                       type="text"
                       value={customRepoName}
                       onChange={(e) => setCustomRepoName(e.target.value)}
-                      placeholder="e.g. qwen2-medquad-lora"
+                      placeholder="e.g. vsp-alpaca-instruct-300ep"
                       disabled={isUploadingHf}
                       className="w-full px-4 py-2.5 rounded-xl bg-[#0B090F] border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/30 transition-all"
                     />
                   </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-white/80">
+                      <span>Training Epochs</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="10000"
+                      value={uploadEpochs}
+                      onChange={(e) => setUploadEpochs(Math.max(1, parseInt(e.target.value) || 1))}
+                      placeholder="300"
+                      disabled={isUploadingHf}
+                      className="w-full px-4 py-2.5 rounded-xl bg-[#0B090F] border border-white/10 text-amber-300 font-mono text-xs focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/30 transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Live Target Destination Preview */}
+                <div className="text-[11px] font-mono text-white/50 bg-[#0B090F] px-3.5 py-2 rounded-xl border border-white/5 flex items-center justify-between">
+                  <span>Target Destination:</span>
+                  <strong className="text-amber-300">
+                    {hfUsername || "username"}/{customRepoName.toLowerCase().replace(/[^a-z0-9-_]/g, "-").replace(/-vml$/, "")}-vml
+                  </strong>
                 </div>
 
                 {/* Model Specs Preview */}
                 <div className="p-3.5 rounded-2xl bg-[#0B090F] border border-white/5 space-y-2">
-                  <div className="text-[11px] font-bold text-white/70">Model Card Specs</div>
+                  <div className="text-[11px] font-bold text-white/70">Model Card Specs Preview</div>
                   <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
-                    <div className="p-2 rounded-lg bg-white/5 text-white/60">
-                      Base Model: <span className="text-white font-semibold">{modelToUpload.base_model || "Qwen/Qwen2-0.5B"}</span>
+                    <div className="p-2 rounded-lg bg-white/5 text-white/60 flex items-center gap-1.5 min-w-0 overflow-hidden" title={modelToUpload.base_model || "Qwen2-0.5B"}>
+                      <span className="shrink-0">Base:</span>
+                      <span className="text-white font-semibold truncate">{modelToUpload.base_model || "Qwen2-0.5B"}</span>
                     </div>
-                    <div className="p-2 rounded-lg bg-white/5 text-white/60">
-                      Dataset: <span className="text-emerald-400 font-semibold">{modelToUpload.dataset_id || "Custom"}</span>
+                    <div className="p-2 rounded-lg bg-white/5 text-white/60 flex items-center gap-1.5 min-w-0 overflow-hidden" title={modelToUpload.dataset_id || "Custom"}>
+                      <span className="shrink-0">Dataset:</span>
+                      <span className="text-emerald-400 font-semibold truncate">{modelToUpload.dataset_id || "Custom"}</span>
                     </div>
-                    <div className="p-2 rounded-lg bg-white/5 text-white/60">
-                      LoRA Rank: <span className="text-amber-400 font-semibold">{modelToUpload.lora_rank || 16}</span>
+                    <div className="p-2 rounded-lg bg-white/5 text-white/60 flex items-center gap-1.5 min-w-0 overflow-hidden">
+                      <span className="shrink-0">Epochs:</span>
+                      <span className="text-orange-400 font-semibold truncate">{uploadEpochs} Epochs</span>
                     </div>
-                    <div className="p-2 rounded-lg bg-white/5 text-white/60">
-                      Files: <span className="text-cyan-300 font-semibold">adapter, config, gguf, README</span>
+                    <div className="p-2 rounded-lg bg-white/5 text-white/60 flex items-center gap-1.5 min-w-0 overflow-hidden">
+                      <span className="shrink-0">LoRA Rank:</span>
+                      <span className="text-amber-400 font-semibold truncate">{modelToUpload.lora_rank || 16}</span>
                     </div>
                   </div>
                 </div>
@@ -1042,6 +1133,27 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
                   </label>
                 </div>
 
+                {/* Explicit Deployment Confirmation Checkbox */}
+                <div className="p-3.5 rounded-2xl bg-amber-500/5 border border-amber-500/20 space-y-2">
+                  <label className="flex items-start gap-2.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={confirmDeployment}
+                      onChange={(e) => setConfirmDeployment(e.target.checked)}
+                      disabled={isUploadingHf || !isHfAuthenticated}
+                      className="mt-0.5 w-4 h-4 rounded border-amber-500/30 bg-black/40 text-amber-500 focus:ring-amber-500/30 cursor-pointer"
+                    />
+                    <div className="space-y-0.5">
+                      <div className="text-xs font-bold text-amber-300">
+                        I confirm and authorize publishing this model to Hugging Face
+                      </div>
+                      <div className="text-[10px] text-white/50 leading-relaxed font-mono">
+                        Target: {hfUsername || "username"}/{customRepoName.toLowerCase().replace(/[^a-z0-9-_]/g, "-")}-vml ({isPrivateRepo ? "Private" : "Public"})
+                      </div>
+                    </div>
+                  </label>
+                </div>
+
                 {/* Error Banner */}
                 {hfUploadError && (
                   <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
@@ -1056,6 +1168,7 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
                     onClick={() => {
                       setModelToUpload(null);
                       setHfUploadError(null);
+                      setConfirmDeployment(false);
                     }}
                     disabled={isUploadingHf}
                     className="px-4 py-2 rounded-xl text-xs font-bold text-white/60 hover:text-white hover:bg-white/5 transition-all cursor-pointer disabled:opacity-50"
@@ -1064,8 +1177,8 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
                   </button>
                   <button
                     onClick={handlePushToHf}
-                    disabled={isUploadingHf || !isHfAuthenticated}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black font-bold text-xs transition-all shadow-lg shadow-amber-900/30 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={isUploadingHf || !isHfAuthenticated || !confirmDeployment}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black font-bold text-xs transition-all shadow-lg shadow-amber-900/30 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {isUploadingHf ? (
                       <>
@@ -1075,7 +1188,7 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
                     ) : (
                       <>
                         <UploadCloud size={14} />
-                        <span>Push Model to Hub</span>
+                        <span>Confirm & Push to Hub</span>
                       </>
                     )}
                   </button>

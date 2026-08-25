@@ -684,6 +684,7 @@ async def list_native_models():
                     # Check for persisted HF metadata in vml_meta.json
                     hf_url = None
                     repo_id = None
+                    epochs_saved = 300
                     meta_path = os.path.join(lora_dir, "vml_meta.json")
                     if os.path.exists(meta_path):
                         try:
@@ -691,6 +692,7 @@ async def list_native_models():
                                 meta_json = json.load(mf)
                                 hf_url = meta_json.get("hf_url")
                                 repo_id = meta_json.get("repo_id")
+                                epochs_saved = meta_json.get("epochs", epochs_saved)
                         except Exception:
                             pass
 
@@ -702,11 +704,12 @@ async def list_native_models():
                         "lora_slug": slug,
                         "base_model": clean_base,
                         "lora_rank": rank,
+                        "epochs": epochs_saved,
                         "dataset_id": dataset_name,
                         "size_mb": size_mb,
                         "created_at": mtime,
                         "architecture": "LoRA Adapter",
-                        "description": f"Domain-adapted LoRA model trained on {dataset_name}.",
+                        "description": f"Domain-adapted LoRA model trained on {dataset_name} ({epochs_saved} Epochs).",
                         "hf_url": hf_url,
                         "repo_id": repo_id
                     })
@@ -1029,6 +1032,7 @@ async def reset_distill():
 class UploadModelToHfRequest(BaseModel):
     lora_slug: str
     repo_name: Optional[str] = None
+    epochs: Optional[int] = 300
     is_private: Optional[bool] = False
     create_space: Optional[bool] = False
 
@@ -1064,30 +1068,37 @@ async def upload_model_to_hf_endpoint(req: UploadModelToHfRequest):
     if not os.path.exists(adapter_path):
         raise HTTPException(status_code=404, detail=f"LoRA adapter '{req.lora_slug}' not found locally.")
 
-    # Read base model & dataset from adapter config if present
+    # Read base model, rank & dataset from adapter config if present
     base_model = "Qwen/Qwen2-0.5B"
     dataset_id = "Custom Dataset"
+    rank = 16
     cfg_path = os.path.join(adapter_path, "adapter_config.json")
     if os.path.exists(cfg_path):
         try:
             with open(cfg_path, "r", encoding="utf-8") as f:
                 cfg = json.load(f)
                 base_model = cfg.get("base_model_name_or_path", base_model)
+                rank = cfg.get("r", rank)
         except Exception:
             pass
 
     if "medquad" in req.lora_slug.lower():
         dataset_id = "lavita/MedQuAD"
+    elif "vsp_alpaca" in req.lora_slug.lower() or "vsp-alpaca" in req.lora_slug.lower():
+        dataset_id = "vishnusureshperumbavoor/vsp_alpaca"
     elif "alpaca" in req.lora_slug.lower():
         dataset_id = "yahma/alpaca-cleaned"
 
     repo_slug = req.repo_name.strip() if req.repo_name and req.repo_name.strip() else req.lora_slug
+    epochs_val = req.epochs if req.epochs and req.epochs > 0 else 300
     
     result = upload_to_hf(
         path=adapter_path,
         repo_slug=repo_slug,
         base_model=base_model,
         dataset_id=dataset_id,
+        epochs=epochs_val,
+        rank=rank,
         is_private=bool(req.is_private)
     )
 
@@ -1110,15 +1121,17 @@ async def upload_model_to_hf_endpoint(req: UploadModelToHfRequest):
         if os.path.exists(meta_path):
             with open(meta_path, "r", encoding="utf-8") as mf:
                 meta_data = json.load(mf)
-        meta_data["hf_url"] = result["url"]
-        meta_data["repo_id"] = result["repo_id"]
-        meta_data["last_uploaded_at"] = time.time()
-        if space_url:
-            meta_data["space_url"] = space_url
+        meta_data.update({
+            "hf_url": result.get("url"),
+            "repo_id": result.get("repo_id"),
+            "space_url": space_url,
+            "epochs": epochs_val,
+            "last_pushed_at": result.get("pushed_at")
+        })
         with open(meta_path, "w", encoding="utf-8") as mf:
             json.dump(meta_data, mf, indent=2)
     except Exception as e:
-        print(f"Failed to persist local vml_meta.json: {e}")
+        print(f"Metadata persist note: {e}")
 
     return {
         "success": True,

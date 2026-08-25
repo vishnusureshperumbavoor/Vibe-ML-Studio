@@ -4,67 +4,103 @@ import json
 from huggingface_hub import HfApi, create_repo, login
 from dotenv import load_dotenv
 
-def generate_model_card(path: str, repo_id: str, base_model: str, dataset_id: str):
+def generate_model_card(path: str, repo_id: str, base_model: str, dataset_id: str, epochs: int = 300, rank: int = 16):
     """
-    Generates a README.md (Hugging Face Model Card) if one doesn't exist.
+    Generates a rich README.md (Hugging Face Model Card) for fine-tuned LoRA models.
     """
+    clean_base = base_model.replace('_', '/').split('/')[-1]
     readme_path = os.path.join(path, "README.md") if os.path.isdir(path) else None
-    
-    # If it's a file, we can't easily add a README inside it, 
-    # but we can upload a separate README to the repo.
-    # For simplicity, we create a temporary README if we are uploading a single file.
     
     content = f"""---
 license: apache-2.0
-base_model: {base_model}
+base_model: {clean_base}
 tags:
 - vml-studio
 - lora
+- peft
+- sft
 - gguf
 - fine-tuned
+- {dataset_id.split('/')[-1].lower()}
+pipeline_tag: text-generation
 ---
 
 # {repo_id.split('/')[-1]}
 
-This model was fine-tuned and optimized using **Vibe ML Studio**, an agentic local-first training platform.
+Fine-tuned LoRA domain model trained on **{dataset_id}** for **{epochs} epochs** using [Vibe ML Studio](https://github.com/vishnusureshperumbavoor/VML-Studio).
 
 ## 🚀 Model Details
+- **Architecture**: LoRA Adapter for `{clean_base}`
 - **Base Model**: [{base_model}](https://huggingface.co/{base_model})
-- **Dataset**: {dataset_id}
-- **Training Method**: LoRA (Low-Rank Adaptation)
-- **Framework**: VML Autonomous SFT Pipeline
+- **Dataset**: `{dataset_id}`
+- **Training Epochs**: `{epochs}`
+- **LoRA Rank ($r$)**: `{rank}`
+- **LoRA Alpha ($\alpha$)**: `32`
+- **Target Modules**: `q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj`
+- **Inference Engine**: VML Arena, PEFT / Transformers, llama.cpp / GGUF
 
 ## 🛠️ Files Included
-- **Adapters**: PEFT weights for use with Transformers/PEFT.
-- **GGUF**: Quantized versions optimized for local inference (VML Arena, LM Studio, Ollama).
+- `adapter_model.safetensors`: Low-rank weight matrices.
+- `adapter_config.json`: PEFT configuration for standard Hugging Face loaders.
+- `adapter.gguf`: Quantized format for 1-click local native execution in VML Studio & llama.cpp.
 
-## ⚡ Powered by VML Studio
-Built with [VML Studio](https://github.com/vishnusureshperumbavoor/VML-Studio) - The Agentic ML Workspace.
+## 💻 Quickstart Inference (Python / PEFT)
+```python
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from peft import PeftModel
+
+base_model_id = "{base_model}"
+peft_model_id = "{repo_id}"
+
+tokenizer = AutoTokenizer.from_pretrained(base_model_id)
+base_model = AutoModelForCausalLM.from_pretrained(
+    base_model_id,
+    torch_dtype=torch.float16,
+    device_map="auto"
+)
+model = PeftModel.from_pretrained(base_model, peft_model_id)
+
+prompt = "Hello! Tell me about yourself."
+inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+outputs = model.generate(**inputs, max_new_tokens=128)
+print(tokenizer.decode(outputs[0], skip_special_tokens=True))
+```
+
+## ⚡ Powered by Vibe ML Studio
+Autonomous agentic fine-tuning, quantization, and local deployment workspace.
 """
     if readme_path:
         with open(readme_path, "w", encoding="utf-8") as f:
             f.write(content)
         return readme_path
     else:
-        # For single files, we return the content so the caller can handle it
         return content
 
 def _load_hf_token():
-    if os.path.exists(".env"):
-        load_dotenv(".env")
-    elif os.path.exists("../.env"):
-        load_dotenv("../.env")
-    elif os.path.exists(os.path.join(os.path.dirname(__file__), ".env")):
-        load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
-    elif os.path.exists(os.path.join(os.path.dirname(__file__), "..", ".env")):
-        load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
+    for env_path in [
+        ".env",
+        "../.env",
+        os.path.join(os.path.dirname(__file__), ".env"),
+        os.path.join(os.path.dirname(__file__), "..", ".env"),
+        "/home/vsp/projects/Vibe-ML-Studio/.env"
+    ]:
+        if os.path.exists(env_path):
+            load_dotenv(env_path, override=True)
+            break
     else:
-        load_dotenv()
-    return os.getenv("HF_TOKEN")
+        load_dotenv(override=True)
+    
+    tok = os.getenv("HF_TOKEN")
+    if tok:
+        tok = tok.strip().strip('"').strip("'").strip()
+        if tok.startswith("export "):
+            tok = tok.replace("export ", "").split("=")[-1].strip().strip('"').strip("'")
+    return tok or None
 
-def upload_to_hf(path: str, repo_slug: str, base_model: str = "Unknown", dataset_id: str = "Unknown", is_private: bool = False):
+def upload_to_hf(path: str, repo_slug: str, base_model: str = "Unknown", dataset_id: str = "Unknown", epochs: int = 300, rank: int = 16, is_private: bool = False):
     """
-    Uploads a file or a folder to Hugging Face and generates a Model Card.
+    Uploads a file or a folder to Hugging Face and generates a Model Card with training specs.
     """
     token = _load_hf_token()
     if not token:
@@ -80,7 +116,13 @@ def upload_to_hf(path: str, repo_slug: str, base_model: str = "Unknown", dataset
         print(f"Authentication failed: {e}")
         return {"success": False, "error": f"Hugging Face authentication failed: {str(e)}"}
 
-    clean_slug = repo_slug.lower().replace('/', '_').replace(' ', '-')
+    clean_slug = repo_slug.lower().replace('/', '_').replace(' ', '-').strip('-')
+    # Strip any leading base-model prefix
+    for p in ["qwen2-0-5b-", "qwen2-", "qwen-", "bonsai-1-7b-", "bonsai-"]:
+        if clean_slug.startswith(p):
+            clean_slug = clean_slug[len(p):]
+            break
+    
     repo_id = f"{username}/{clean_slug}"
     if not repo_id.endswith("-vml") and not "-vml" in repo_id:
         repo_id = f"{repo_id}-vml"
@@ -93,7 +135,7 @@ def upload_to_hf(path: str, repo_slug: str, base_model: str = "Unknown", dataset
 
     # Generate README
     print("Generating Model Card (README.md)...")
-    readme_content = generate_model_card(path, repo_id, base_model, dataset_id)
+    readme_content = generate_model_card(path, repo_id, base_model, dataset_id, epochs=epochs, rank=rank)
 
     try:
         if os.path.isdir(path):
