@@ -1599,8 +1599,8 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
             lastGeneratedImage={lastGeneratedImage}
           />
         ) : activeView === "workflow" ? (
-          <div className="flex-1 flex flex-col bg-[#0B090F] overflow-y-auto p-8 items-center space-y-12">
-            <div className="text-center space-y-4 max-w-2xl">
+          <div className="flex-1 flex flex-col bg-[#0B090F] overflow-y-auto p-8 items-center space-y-10">
+            <div className="text-center space-y-3 max-w-2xl shrink-0">
               <h2 className="text-3xl font-black text-white tracking-tighter uppercase">
                 Model Production Center
               </h2>
@@ -1612,7 +1612,7 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
               onChange={setWorkflowMode}
             />
 
-            <div className="w-full max-w-4xl bg-[#140F1D] border border-white/5 rounded-[32px] p-8 shadow-2xl relative group">
+            <div className="w-full max-w-4xl bg-[#140F1D] border border-white/5 rounded-[32px] p-8 shadow-2xl relative group shrink-0">
               <div className="absolute top-0 right-0 p-12 bg-amber-500/5 blur-[120px] rounded-full group-hover:bg-amber-500/10 transition-colors duration-1000" />
 
               {workflowMode === "finetune" ? (
