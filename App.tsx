@@ -6,6 +6,7 @@ import { ChatView } from "./components/ChatView";
 import { CreativeStudio } from "./components/CreativeStudio";
 import { AppHeader, TopLevelView } from "./components/AppHeader";
 import { WorkflowView } from "./components/WorkflowView";
+import { ModelGallery } from "./components/ModelGallery";
 import { QuantizationPanel } from "./components/QuantizationPanel";
 import { BenchmarkPanel } from "./components/BenchmarkPanel";
 import { OnnxPanel } from "./components/OnnxPanel";
@@ -16,7 +17,7 @@ import { useWorkflows } from "./hooks/useWorkflows";
 import { fetchSystemSpecs } from "./utils/apiUtils";
 
 export default function App() {
-  const [activeView, setActiveView] = useState<TopLevelView>("chat");
+  const [activeView, setActiveView] = useState<TopLevelView>("gallery");
   const [chatSelectedModel, setChatSelectedModel] = useState<string>("");
   const [systemInfo, setSystemInfo] = useState<any>(null);
 
@@ -110,9 +111,9 @@ export default function App() {
     });
   }, []);
 
-  const handleOpenArena = (modelId?: string) => {
+  const handleOpenChat = (modelId?: string) => {
     if (modelId) setChatSelectedModel(modelId);
-    setActiveView("chat");
+    setActiveView("gallery");
   };
 
   return (
@@ -138,10 +139,13 @@ export default function App() {
 
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden relative w-full">
-        {activeView === "chat" ? (
-          <ChatView
-            selectedModel={chatSelectedModel}
-            onModelChange={setChatSelectedModel}
+        {activeView === "gallery" ? (
+          <ModelGallery
+            initialSelectedModel={chatSelectedModel}
+            onNavigateToBuild={() => {
+              setActiveView("workflow");
+              setWorkflowMode("finetune");
+            }}
           />
         ) : activeView === "knowledge" ? (
           <KnowledgeLibrary
@@ -181,7 +185,7 @@ export default function App() {
             sftRank={sftRank}
             setRank={setSftRank}
             onStartSFT={handleStartSFT}
-            onNavigateToChat={handleOpenArena}
+            onNavigateToChat={handleOpenChat}
             cells={cells}
             activeCellId={activeCellId}
             isAutoRunning={isAutoRunning}
@@ -213,7 +217,7 @@ export default function App() {
                 isExecuting={isQuantizing}
                 deploymentUrl={deploymentUrl}
                 onTestInArena={(filename) => {
-                  handleOpenArena(filename || workflowModelFilename || undefined);
+                  handleOpenChat(filename || workflowModelFilename || undefined);
                 }}
               />
             </div>

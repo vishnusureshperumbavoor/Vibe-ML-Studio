@@ -331,6 +331,11 @@ print("🛠️ Mapping dataset to instructions...")
 dataset = dataset.map(get_universal_format)
 """,
             f"""# Block 4: Training Execution
+import os
+import json
+import transformers
+from trl import SFTTrainer, SFTConfig
+
 class VMLReportingCallback(transformers.TrainerCallback):
     def on_log(self, args, state, control, logs=None, **kwargs):
         if logs:

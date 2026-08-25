@@ -39,5 +39,9 @@ if [ "$DO_INSTALL" = true ]; then
 fi
 
 # Run the server
+echo "==> Ensuring port 2000 is available..."
+fuser -k 2000/tcp 2>/dev/null || true
+
 echo "==> Starting backend server..."
 python main.py
+

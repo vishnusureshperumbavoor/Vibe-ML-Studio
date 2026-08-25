@@ -39,7 +39,6 @@ interface Message {
     ttft: number;
     tps: number;
   };
-  ragEvidence?: any[];
 }
 
 interface VMLModel {
@@ -65,8 +64,6 @@ const renderMessageList = (
   scrollRef: any,
   onScroll: any,
   stopStream: () => void,
-  setActiveEvidence: (e: any[]) => void,
-  setIsEvidenceOpen: (o: boolean) => void,
   hasModels: boolean = true,
   onDownloadQwen?: () => void,
   qwenStatus?: string,
@@ -236,12 +233,42 @@ const renderMessageList = (
                             const parts = content.split(/(\[IMAGE: [^\]]+\])/g);
                             return parts.map((part, i) => {
                               if (
-                                part.startsWith("[IMAGE: ") &&
-                                part.endsWith("]")
+                                part.startsWith("```") &&
+                                part.endsWith("```")
                               ) {
-                                const filename = part.slice(8, -1).trim();
+                                const lines = part.slice(3, -3).trim();
+                                const firstLineEnd = lines.indexOf("\n");
+                                const language =
+                                  firstLineEnd !== -1
+                                    ? lines.slice(0, firstLineEnd).trim()
+                                    : "";
+                                const code =
+                                  firstLineEnd !== -1
+                                    ? lines.slice(firstLineEnd + 1)
+                                    : lines;
+
                                 return (
-                                  <RenderedImage key={i} source={filename} />
+                                  <div
+                                    key={i}
+                                    className="my-4 rounded-xl overflow-hidden border border-[#352554] bg-[#0B090F]"
+                                  >
+                                    <div className="flex items-center justify-between px-4 py-2 bg-[#140F1D] border-b border-[#352554] text-xs text-gray-400">
+                                      <span className="font-mono">
+                                        {language || "code"}
+                                      </span>
+                                      <button
+                                        onClick={() =>
+                                          navigator.clipboard.writeText(code)
+                                        }
+                                        className="hover:text-white transition-colors"
+                                      >
+                                        Copy
+                                      </button>
+                                    </div>
+                                    <pre className="p-4 text-xs font-mono overflow-x-auto text-[#E2D8F0]">
+                                      <code>{code}</code>
+                                    </pre>
+                                  </div>
                                 );
                               }
                               return part;
@@ -252,39 +279,18 @@ const renderMessageList = (
                           )}
                         </div>
 
-                        {msg.role === "user" &&
-                          msg.ragEvidence &&
-                          msg.ragEvidence.length > 0 && (
-                            <button
-                              onClick={() => {
-                                setActiveEvidence(msg.ragEvidence || []);
-                                setIsEvidenceOpen(true);
-                              }}
-                              className="mt-3 flex items-center gap-2 px-3 py-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-[10px] text-indigo-300 font-bold hover:bg-indigo-500/20 transition-all uppercase tracking-wider"
-                            >
-                              <Search size={12} />
-                              View Semantic Sources ({msg.ragEvidence.length})
-                            </button>
-                          )}
-
                         {isAssistant && msg.stats && (
                           <div className="mt-4 pt-3 border-t border-purple-500/10 flex items-center gap-4 text-[10px] font-medium tracking-wider uppercase">
                             <div className="flex items-center gap-1.5 text-purple-400/70">
                               <Clock size={10} />
                               <span>
-                                TTFT:{" "}
-                                <span className="text-purple-300">
-                                  {msg.stats.ttft}ms
-                                </span>
+                                TTFT: {msg.stats.ttft}ms
                               </span>
                             </div>
                             <div className="flex items-center gap-1.5 text-indigo-400/70">
                               <Activity size={10} />
                               <span>
-                                Speed:{" "}
-                                <span className="text-indigo-300">
-                                  {msg.stats.tps} t/s
-                                </span>
+                                Speed: {msg.stats.tps} t/s
                               </span>
                             </div>
                           </div>
@@ -299,9 +305,8 @@ const renderMessageList = (
         </div>
       </div>
 
-      {/* Floating Column-Level Stop Button */}
       {isSending && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 animate-in slide-in-from-bottom-4 zoom-in duration-300">
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20">
           <button
             onClick={stopStream}
             className="flex items-center gap-2 px-4 py-2 bg-indigo-500/20 text-indigo-300 border border-indigo-500/50 hover:bg-indigo-500/30 shadow-lg shadow-indigo-900/40 rounded-full transition-all hover:scale-105 active:scale-95 cursor-pointer backdrop-blur-md"
@@ -324,11 +329,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [isSplitMode, setIsSplitMode] = useState(false);
   const [selectedModel2, setSelectedModel2] = useState("");
   const [nativeModels, setNativeModels] = useState<VMLModel[]>([]);
-
-  // Filter list to only show Native (llama-cpp-python) models as requested
   const allModels = nativeModels;
 
-  // Qwen2 0.5B Download & Status State
   const [qwenStatus, setQwenStatus] = useState<'idle' | 'downloading' | 'ready' | 'error'>('idle');
   const [qwenMessage, setQwenMessage] = useState<string>('');
   const [qwenProgress, setQwenProgress] = useState<number>(0);
@@ -348,8 +350,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
           if (typeof data.progress === 'number') {
             setQwenProgress(data.progress);
           }
-        } else if (data.status === 'error') {
-          setQwenStatus('error');
         }
         if (data.message) setQwenMessage(data.message);
       }
@@ -358,8 +358,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   useEffect(() => {
     checkQwenStatus();
-    const pollInterval = qwenStatus === 'downloading' ? 1000 : 2500;
-    const interval = setInterval(checkQwenStatus, pollInterval);
+    const interval = setInterval(checkQwenStatus, 2000);
     return () => clearInterval(interval);
   }, [qwenStatus]);
 
@@ -380,18 +379,18 @@ export const ChatView: React.FC<ChatViewProps> = ({
       }
     } catch (e) {
       setQwenStatus('error');
-      setQwenMessage('Failed to start download.');
+      setQwenMessage('Failed to trigger download.');
     } finally {
       setIsDownloadingQwen(false);
     }
   };
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+
   const [reportCopied, setReportCopied] = useState(false);
 
   const handleCopyLatestReport = () => {
     if (messagesA.length < 2) return;
 
-    // Find last assistant message and previous user message
+    // Find the latest assistant message
     const lastAssistantIdx = [...messagesA]
       .reverse()
       .findIndex((m) => m.role === "assistant");
@@ -402,9 +401,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
     const userMsg =
       actualIdx > 0 ? messagesA[actualIdx - 1] : { content: "Unknown" };
 
-    const report = `[VML Arena Diagnostic Report]
+    const report = `[VML Model Diagnostic Report]
 Model: ${selectedModel}
-Knowledge Base: ${selectedCollection || "None"}
 TTFT: ${assistantMsg.stats?.ttft || 0}ms
 Speed: ${assistantMsg.stats?.tps || 0} t/s
 
@@ -419,21 +417,10 @@ ${assistantMsg.content}`;
     setTimeout(() => setReportCopied(false), 2000);
   };
 
-  const [allCollections, setAllCollections] = useState<any[]>([]);
-  const [selectedCollection, setSelectedCollection] = useState<string>("");
-  const [activeEvidence, setActiveEvidence] = useState<any[] | null>(null);
-  const [isEvidenceOpen, setIsEvidenceOpen] = useState(false);
-
   const [messagesA, setMessagesA] = useState<Message[]>([]);
   const [messagesB, setMessagesB] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-
-  const [onnxStatus, setOnnxStatus] = useState<
-    Record<
-      string,
-      { status: "idle" | "downloading" | "ready"; progress: number }
-    >
-  >({});
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const [isSendingA, setIsSendingA] = useState(false);
   const [isSendingB, setIsSendingB] = useState(false);
@@ -449,30 +436,7 @@ ${assistantMsg.content}`;
 
   useEffect(() => {
     fetchNativeModels();
-    fetchCollections();
   }, []);
-
-  const fetchCollections = async () => {
-    try {
-      const resp = await fetch("http://127.0.0.1:3001/mcp/call", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: "list_knowledge_collections",
-          arguments: {},
-        }),
-      });
-      const data = await resp.json();
-      const text = data[0]?.text || data.result?.[0]?.text || "";
-      if (text.includes("[JSON_RESULTS]")) {
-        const jsonStr = text.split("[JSON_RESULTS]")[1].trim();
-        const results = JSON.parse(jsonStr);
-        setAllCollections(results.collections || []);
-      }
-    } catch (e) {
-      console.error("Failed to fetch collections:", e);
-    }
-  };
 
   const fetchNativeModels = async () => {
     try {
@@ -491,43 +455,19 @@ ${assistantMsg.content}`;
         setSelectedModel2(
           allModels.length > 1 ? allModels[1].name : allModels[0].name,
         );
-
-      // Check which ONNX models are already in IndexedDB
-      const checkPersistence = async () => {
-        const statuses: any = {};
-        for (const m of allModels) {
-          if (m.source === "onnx" && m.onnx_slug) {
-            const isReady = await onnxService.isModelReady(m.onnx_slug);
-            if (isReady) {
-              statuses[m.onnx_slug] = { status: "ready", progress: 100 };
-            }
-          }
-        }
-        if (Object.keys(statuses).length > 0) {
-          setOnnxStatus((prev) => ({ ...prev, ...statuses }));
-        }
-      };
-      checkPersistence();
     }
-  }, [allModels.length, selectedModel, selectedModel2]);
+  }, [allModels]);
 
   const handleScrollA = () => {
-    if (scrollA.current) {
-      nearBottomA.current =
-        scrollA.current.scrollHeight -
-          scrollA.current.scrollTop -
-          scrollA.current.clientHeight <
-        100;
-    }
+    if (!scrollA.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollA.current;
+    nearBottomA.current = scrollHeight - scrollTop - clientHeight < 100;
   };
+
   const handleScrollB = () => {
-    if (scrollB.current) {
-      nearBottomB.current =
-        scrollB.current.scrollHeight -
-          scrollB.current.scrollTop -
-          scrollB.current.clientHeight <
-        100;
-    }
+    if (!scrollB.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollB.current;
+    nearBottomB.current = scrollHeight - scrollTop - clientHeight < 100;
   };
 
   useEffect(() => {
@@ -540,17 +480,6 @@ ${assistantMsg.content}`;
       scrollB.current.scrollTop = scrollB.current.scrollHeight;
   }, [messagesB]);
 
-  const handleStop = () => {
-    if (abortA.current) {
-      abortA.current.abort();
-      abortA.current = null;
-    }
-    if (abortB.current) {
-      abortB.current.abort();
-      abortB.current = null;
-    }
-  };
-
   const fetchStream = async (
     modelName: string,
     history: Message[],
@@ -562,17 +491,17 @@ ${assistantMsg.content}`;
     abortCtrl.current = new AbortController();
     setSending(true);
 
-    const modelObj = allModels.find((m) => m.name === modelName);
-
-    // Always use native inference Engine
     const url = "http://127.0.0.1:2000/v1/native/chat";
+    const modelObj = allModels.find((m) => m.name === modelName);
+    const baseGguf =
+      allModels.find((m) => m.type === "base")?.name ||
+      "qwen2-0_5b-instruct-q4_k_m.gguf";
 
-    // Build payload
     const body = {
       model_filename:
         modelObj?.type === "base"
           ? modelObj.name
-          : "qwen2-0_5b-instruct-q8_0.gguf",
+          : baseGguf,
       messages: history,
       lora_slug: modelObj?.lora_slug,
     };
@@ -596,65 +525,86 @@ ${assistantMsg.content}`;
       ]);
 
       while (true) {
-        const { done, value } = await reader.read();
+        const { value, done } = await reader.read();
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        let boundary = buffer.indexOf("\n");
-        while (boundary !== -1) {
-          const line = buffer.slice(0, boundary).trim();
-          buffer = buffer.slice(boundary + 1);
-          if (line) {
-            try {
-              const cleanLine = line.startsWith("data: ")
-                ? line.slice(6)
-                : line;
-              const json = JSON.parse(cleanLine);
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
 
-              if (json.error) {
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const dataStr = line.replace("data: ", "").trim();
+            if (!dataStr) continue;
+
+            try {
+              const data = JSON.parse(dataStr);
+              if (data.done) break;
+              if (data.error) {
                 setMsg((prev) => {
-                  const newMessages = [...prev];
-                  newMessages[newMessages.length - 1] = {
-                    ...newMessages[newMessages.length - 1],
-                    content: `Error: ${json.error}`,
-                  };
-                  return newMessages;
+                  const updated = [...prev];
+                  const last = updated[updated.length - 1];
+                  if (last && last.role === "assistant") {
+                    last.content = `Error: ${data.error}`;
+                  }
+                  return updated;
                 });
                 break;
               }
 
-              const newContent = json.content || "";
-              const newReasoning = "";
-              const ttft = json.ttft;
-              const tps = json.tps;
-
-              if (newContent || newReasoning || ttft || tps) {
+              if (data.content !== undefined) {
                 setMsg((prev) => {
-                  const newMessages = [...prev];
-                  const lastMsg = newMessages[newMessages.length - 1];
-                  newMessages[newMessages.length - 1] = {
-                    ...lastMsg,
-                    content: lastMsg.content + newContent,
-                    reasoning: (lastMsg.reasoning || "") + newReasoning,
-                    stats: ttft ? { ttft, tps } : lastMsg.stats,
-                  };
-                  return newMessages;
+                  const updated = [...prev];
+                  const last = updated[updated.length - 1];
+                  if (last && last.role === "assistant") {
+                    const raw = data.content;
+
+                    if (raw.includes("<think>")) {
+                      const thinkParts = raw.split("<think>");
+                      if (thinkParts[1]) {
+                        const innerParts = thinkParts[1].split("</think>");
+                        last.reasoning = (last.reasoning || "") + innerParts[0];
+                        if (innerParts[1]) {
+                          last.content += innerParts[1];
+                        }
+                      }
+                    } else if (raw.includes("</think>")) {
+                      const thinkParts = raw.split("</think>");
+                      last.reasoning =
+                        (last.reasoning || "") + thinkParts[0];
+                      if (thinkParts[1]) {
+                        last.content += thinkParts[1];
+                      }
+                    } else {
+                      last.content += raw;
+                    }
+
+                    if (data.ttft || data.tps) {
+                      last.stats = {
+                        ttft: data.ttft || last.stats?.ttft || 0,
+                        tps: data.tps || last.stats?.tps || 0,
+                      };
+                    }
+                  }
+                  return updated;
                 });
               }
-            } catch (e) {}
+            } catch (err) {
+              console.error("Error parsing stream chunk:", err, dataStr);
+            }
           }
-          boundary = buffer.indexOf("\n");
         }
       }
-    } catch (error: any) {
-      if (error.name !== "AbortError") {
-        setMsg((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            content: `Error: Failed to reach Native Engine.`,
-          },
-        ]);
+    } catch (e: any) {
+      if (e.name !== "AbortError") {
+        setMsg((prev) => {
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last && last.role === "assistant") {
+            last.content = `Failed to generate response: ${e.message}`;
+          }
+          return updated;
+        });
       }
     } finally {
       setSending(false);
@@ -665,78 +615,22 @@ ${assistantMsg.content}`;
   const handleSend = async () => {
     if (!input.trim() || !selectedModel || isSending) return;
 
-    let enrichedInput = input;
-    let ragContext = "";
-    let currentEvidence: any[] = [];
-
-    // 1. Perform RAG Search if collection is selected
-    if (selectedCollection) {
-      try {
-        const resp = await fetch("http://127.0.0.1:3001/mcp/call", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: "search_knowledge",
-            arguments: {
-              query: input,
-              collection: selectedCollection,
-              limit: 2,
-            },
-          }),
-        });
-        const data = await resp.json();
-        const text = data.result?.[0]?.text || data[0]?.text || "";
-        if (text.includes("[JSON_RESULTS]")) {
-          currentEvidence = JSON.parse(text.split("[JSON_RESULTS]")[1].trim());
-          if (currentEvidence.length > 0) {
-            ragContext =
-              "You are a Knowledge Assistant. Use the following context fragments to answer the user's question accurately.\n\n" +
-              "--- CONTEXT ---\n" +
-              currentEvidence
-                .map((r: any, i: number) => `[Fragment ${i + 1}]\n${r.content}`)
-                .join("\n\n") +
-              "\n\n--- CRITICAL INSTRUCTION ---\nAnswer the user's question ONLY using the context above. Be concise and professional. If the information is missing, state that you do not have enough information.";
-          }
-        }
-      } catch (e) {
-        console.error("RAG Search failed:", e);
-      }
-    }
-
     const userDisplayMsg: Message = {
       role: "user",
       content: input,
-      ragEvidence: currentEvidence,
     };
 
-    // Construct actual history for the model
-    const newModelHistoryA = [...messagesA];
-    if (ragContext) {
-      newModelHistoryA.push({ role: "system", content: ragContext });
-    }
-    newModelHistoryA.push({ role: "user", content: input });
-
-    setMessagesA((prev) => [...prev, userDisplayMsg]); // Show clean message in UI
+    const newModelHistoryA = [...messagesA, userDisplayMsg];
+    setMessagesA((prev) => [...prev, userDisplayMsg]);
 
     let newModelHistoryB: Message[] = [];
     if (isSplitMode && selectedModel2) {
-      newModelHistoryB = [...messagesB];
-      if (ragContext) {
-        newModelHistoryB.push({ role: "system", content: ragContext });
-      }
-      newModelHistoryB.push({ role: "user", content: input });
+      newModelHistoryB = [...messagesB, userDisplayMsg];
       setMessagesB((prev) => [...prev, userDisplayMsg]);
     }
 
     setInput("");
 
-    // Snaps the cursor back to the prompt immediately
-    setTimeout(() => {
-      inputRef.current?.focus();
-    }, 0);
-
-    // 2. Identify if we should use local ONNX or Server API
-    const modelA = allModels.find((m) => m.name === selectedModel);
     const modelB = selectedModel2
       ? allModels.find((m) => m.name === selectedModel2)
       : null;
@@ -978,26 +872,6 @@ ${assistantMsg.content}`;
           {isSplitMode && (
             <ModelSelector val={selectedModel2} onChange={setSelectedModel2} />
           )}
-
-          <div className="w-[1px] h-6 bg-[#352554]/50 mx-2" />
-
-          <div className="relative group">
-            <select
-              value={selectedCollection}
-              onChange={(e) => setSelectedCollection(e.target.value)}
-              className="appearance-none bg-[#140F1D] border border-indigo-500/30 text-indigo-300 text-[10px] py-2 pl-8 pr-8 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all cursor-pointer hover:bg-[#1D152A] max-w-[150px] truncate uppercase font-bold tracking-wider"
-            >
-              <option value="">No Knowledge</option>
-              {allCollections.map((c) => (
-                <option key={c.name} value={c.name}>
-                  {c.name} ({c.count})
-                </option>
-              ))}
-            </select>
-            <div className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-indigo-400">
-              <Database size={12} />
-            </div>
-          </div>
         </div>
 
         <div className="flex items-center gap-3">
@@ -1043,8 +917,6 @@ ${assistantMsg.content}`;
               abortA.current = null;
             }
           },
-          setActiveEvidence,
-          setIsEvidenceOpen,
           allModels.length > 0,
           handleDownloadQwen,
           qwenStatus,
@@ -1068,8 +940,6 @@ ${assistantMsg.content}`;
                     abortB.current = null;
                   }
                 },
-                setActiveEvidence,
-                setIsEvidenceOpen,
                 allModels.length > 0,
                 handleDownloadQwen,
                 qwenStatus,
@@ -1078,56 +948,6 @@ ${assistantMsg.content}`;
               )}
             </div>
           </>
-        )}
-
-        {/* Evidence Inspector Side-Pane */}
-        {isEvidenceOpen && activeEvidence && (
-          <div className="w-[400px] border-l border-indigo-500/20 bg-[#0D0B14]/80 backdrop-blur-2xl flex flex-col z-20 animate-in slide-in-from-right duration-300">
-            <div className="p-6 border-b border-indigo-500/10 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-indigo-400">
-                <Search size={16} />
-                <h3 className="text-xs font-bold uppercase tracking-widest">
-                  Evidence Inspector
-                </h3>
-              </div>
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={() => setIsEvidenceOpen(false)}
-              >
-                <Plus className="rotate-45 text-gray-500" size={20} />
-              </Button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {activeEvidence.map((ev, i) => (
-                <div
-                  key={i}
-                  className="p-5 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 space-y-3 group hover:border-indigo-500/30 transition-colors"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="px-2 py-1 bg-indigo-500/20 rounded text-[10px] font-bold text-indigo-300">
-                      SOURCE {i + 1}
-                    </span>
-                    <span className="text-[10px] text-gray-500 font-mono">
-                      PAGE {ev.metadata.page}
-                    </span>
-                  </div>
-                  <p className="text-sm text-indigo-100 leading-relaxed italic line-clamp-6">
-                    "{ev.content}"
-                  </p>
-                  <div className="pt-2 flex items-center gap-2 text-[10px] text-indigo-400/60 truncate">
-                    <FileText size={10} />
-                    {ev.metadata.source}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="p-6 bg-indigo-500/5 text-center">
-              <p className="text-[10px] text-indigo-400/40 uppercase tracking-widest font-bold">
-                Semantic Rank: ChromaDB
-              </p>
-            </div>
-          </div>
         )}
       </div>
 

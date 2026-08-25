@@ -7,6 +7,7 @@ import uuid
 class KernelManager:
     def __init__(self):
         self.process = None
+        self.lock = asyncio.Lock()
         self.marker = f"VML_END_OF_BLOCK_{uuid.uuid4().hex[:8]}"
 
     async def start(self):
@@ -44,33 +45,32 @@ class KernelManager:
 
     async def execute(self, code: str):
         """Executes a block of code and yields output until finished."""
-        if not self.process:
-            await self.start()
+        async with self.lock:
+            if not self.process or self.process.returncode is not None:
+                await self.start()
 
-        # Append a marker to detect end of execution
-        # We wrap the code to ensure the marker is printed even on error, or at least tried.
-        # However, a catastrophic syntax error might break the -i loop.
-        full_code = f"\n{code}\nprint('{self.marker}')\n"
-        
-        try:
-            self.process.stdin.write(full_code.encode('utf-8'))
-            await self.process.stdin.drain()
+            full_code = f"\n{code}\nprint('{self.marker}')\n"
             
-            while True:
-                line_bytes = await self.process.stdout.readline()
-                if not line_bytes:
-                    break
+            try:
+                self.process.stdin.write(full_code.encode('utf-8'))
+                await self.process.stdin.drain()
+                
+                while True:
+                    line_bytes = await self.process.stdout.readline()
+                    if not line_bytes:
+                        break
+                        
+                    line = line_bytes.decode('utf-8', errors='replace')
                     
-                line = line_bytes.decode('utf-8', errors='replace')
-                
-                # Check if we hit the marker
-                if self.marker in line:
-                    break
-                
-                yield line
-                
-        except Exception as e:
-            yield f"\n[KERNEL ERROR] {str(e)}\n"
-            await self.stop() # Restart on total failure
+                    # Check if we hit the marker
+                    if self.marker in line:
+                        break
+                    
+                    yield line
+                    
+            except Exception as e:
+                yield f"\n[KERNEL ERROR] {str(e)}\n"
+                if not self.process or self.process.returncode is not None:
+                    await self.stop()
 
 kernel_manager = KernelManager()

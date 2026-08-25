@@ -521,7 +521,7 @@ async def download_gguf_model(
 async def list_native_models():
     """
     Returns a unified list of available native models.
-    Includes base GGUFs and detected Fine-tuned adapters.
+    Includes base GGUFs, fine-tuned adapters, and ONNX models with rich metadata.
     """
     results = []
     
@@ -529,7 +529,33 @@ async def list_native_models():
     if os.path.exists(GGUF_DIR):
         for f in os.listdir(GGUF_DIR):
             if f.lower().endswith(".gguf"):
-                results.append({"name": f, "source": "native", "type": "base"})
+                file_path = os.path.join(GGUF_DIR, f)
+                size_mb = round(os.path.getsize(file_path) / (1024 * 1024), 1) if os.path.isfile(file_path) else 0
+                mtime = os.path.getmtime(file_path)
+                
+                # Extract quantization and size tags
+                quant = "Q4_K_M"
+                if "q8_0" in f.lower(): quant = "Q8_0"
+                elif "q4_k" in f.lower(): quant = "Q4_K_M"
+                elif "q5" in f.lower(): quant = "Q5_K_M"
+                
+                params = "0.5B"
+                if "0.5b" in f.lower() or "0_5b" in f.lower(): params = "0.5B"
+                elif "1.5b" in f.lower() or "1_5b" in f.lower(): params = "1.5B"
+                elif "7b" in f.lower(): params = "7B"
+                
+                results.append({
+                    "name": f,
+                    "display_name": f.replace('.gguf', '').replace('-', ' ').title(),
+                    "source": "native",
+                    "type": "base",
+                    "size_mb": size_mb,
+                    "created_at": mtime,
+                    "quantization": quant,
+                    "parameters": params,
+                    "architecture": "Qwen2" if "qwen" in f.lower() else "Llama",
+                    "description": "Base quantized instruction-tuned model for local inference."
+                })
     
     # 2. Fine-tuned Adapters in server/models/adapters
     if os.path.exists(ADAPTERS_DIR):
@@ -537,12 +563,52 @@ async def list_native_models():
             lora_dir = os.path.join(ADAPTERS_DIR, slug)
             if os.path.isdir(lora_dir):
                 # Check for adapter weights
-                if os.path.exists(os.path.join(lora_dir, "adapter_model.safetensors")):
+                has_weights = (
+                    os.path.exists(os.path.join(lora_dir, "adapter_model.safetensors")) or
+                    os.path.exists(os.path.join(lora_dir, "adapter_model.bin")) or
+                    os.path.exists(os.path.join(lora_dir, "adapter.gguf"))
+                )
+                if has_weights:
+                    # Calculate directory size
+                    total_bytes = sum(
+                        os.path.getsize(os.path.join(lora_dir, f))
+                        for f in os.listdir(lora_dir)
+                        if os.path.isfile(os.path.join(lora_dir, f))
+                    )
+                    size_mb = round(total_bytes / (1024 * 1024), 1)
+                    mtime = os.path.getmtime(lora_dir)
+                    
+                    # Read adapter_config.json if available
+                    cfg_path = os.path.join(lora_dir, "adapter_config.json")
+                    base_model = "Qwen/Qwen2-0.5B"
+                    rank = 16
+                    if os.path.exists(cfg_path):
+                        try:
+                            with open(cfg_path, 'r', encoding='utf-8') as cf:
+                                cfg = json.load(cf)
+                                base_model = cfg.get("base_model_name_or_path", base_model)
+                                rank = cfg.get("r", rank)
+                        except Exception:
+                            pass
+                    
+                    # Infer dataset from slug (e.g. qwen2-0-5b-medquad-instruct-vml1 -> MedQuAD)
+                    dataset_name = "Custom Domain"
+                    if "medquad" in slug.lower(): dataset_name = "lavita/MedQuAD"
+                    elif "alpaca" in slug.lower(): dataset_name = "Alpaca Cleaned"
+                    
                     results.append({
-                        "name": f"Fine-tuned: {slug}", 
-                        "source": "native", 
+                        "name": f"Fine-tuned: {slug}",
+                        "display_name": slug.replace('-', ' ').title(),
+                        "source": "native",
                         "type": "adapter",
-                        "lora_slug": slug
+                        "lora_slug": slug,
+                        "base_model": base_model,
+                        "lora_rank": rank,
+                        "dataset_id": dataset_name,
+                        "size_mb": size_mb,
+                        "created_at": mtime,
+                        "architecture": "LoRA Adapter",
+                        "description": f"Domain-adapted LoRA model trained on {dataset_name}."
                     })
 
     # 3. ONNX Models in server/models/onnx_export
@@ -551,12 +617,26 @@ async def list_native_models():
             onnx_path = os.path.join(ONNX_DIR, slug)
             if os.path.isdir(onnx_path):
                 # Check for onnx files
-                if any(f.endswith(".onnx") for f in os.listdir(onnx_path)):
+                onnx_files = [f for f in os.listdir(onnx_path) if f.endswith(".onnx")]
+                if onnx_files:
+                    total_bytes = sum(
+                        os.path.getsize(os.path.join(onnx_path, f))
+                        for f in os.listdir(onnx_path)
+                        if os.path.isfile(os.path.join(onnx_path, f))
+                    )
+                    size_mb = round(total_bytes / (1024 * 1024), 1)
+                    mtime = os.path.getmtime(onnx_path)
+                    
                     results.append({
                         "name": f"ONNX: {slug}",
+                        "display_name": slug.replace('-', ' ').title(),
                         "source": "onnx",
                         "type": "onnx",
-                        "onnx_slug": slug
+                        "onnx_slug": slug,
+                        "size_mb": size_mb,
+                        "created_at": mtime,
+                        "architecture": "ONNX Runtime",
+                        "description": "In-browser WebAssembly & WebGPU runtime export."
                     })
                     
     return {"models": results}

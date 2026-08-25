@@ -2,12 +2,12 @@ import React from "react";
 import {
   Sparkles,
   Zap,
-  MessageSquare,
   Database,
   StopCircle,
   Box,
   BarChart2,
   Cpu,
+  LayoutGrid,
 } from "lucide-react";
 import { Button } from "./Button";
 import { TrainingProgress } from "../hooks/useWorkflows";
@@ -15,11 +15,12 @@ import { TrainingProgress } from "../hooks/useWorkflows";
 export type TopLevelView =
   | "knowledge"
   | "workflow"
-  | "gguf"
+  | "gallery"
   | "evaluate"
-  | "onnx"
   | "chat"
   | "creative"
+  | "gguf"
+  | "onnx"
   | "studio";
 
 interface AppHeaderProps {
@@ -153,6 +154,20 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           <Button
             variant="ghost"
             size="sm"
+            onClick={() => setActiveView("gallery")}
+            className={`gap-2 h-10 px-3.5 rounded-xl transition-all duration-300 border ${
+              activeView === "gallery"
+                ? "bg-amber-500/20 text-amber-200 border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
+                : "text-gray-400 border-transparent hover:bg-white/5"
+            }`}
+          >
+            <LayoutGrid size={16} />
+            <span className="text-xs font-semibold">Gallery</span>
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => setActiveView("evaluate")}
             className={`gap-2 h-10 px-3.5 rounded-xl transition-all duration-300 border ${
               activeView === "evaluate"
@@ -162,20 +177,6 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           >
             <BarChart2 size={16} />
             <span className="text-xs font-semibold">Evaluation</span>
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setActiveView("chat")}
-            className={`gap-2 h-10 px-3.5 rounded-xl transition-all duration-300 border ${
-              activeView === "chat"
-                ? "bg-purple-500/20 text-purple-200 border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.15)]"
-                : "text-gray-400 border-transparent hover:bg-white/5"
-            }`}
-          >
-            <MessageSquare size={16} />
-            <span className="text-xs font-semibold">Arena</span>
           </Button>
 
           <Button
