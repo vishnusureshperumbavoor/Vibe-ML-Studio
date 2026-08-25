@@ -7,6 +7,7 @@ import {
   QueryHistoryEntry,
   syncQueryIndexes,
   reconcileQueryCells,
+  extractLatestTrainingMetrics,
 } from "../utils/notebookUtils";
 
 export function useNotebook(
@@ -113,21 +114,16 @@ export function useNotebook(
     const localResult = await executeCode(
       cell.content,
       (partial) => {
-        // Extract step and loss from terminal output stream
-        const stepMatch =
-          partial.match(/vml_step['"]?\s*[:=]\s*(\d+)/i) ||
-          partial.match(/['"]step['"]\s*[:=]\s*(\d+)/i) ||
-          partial.match(/Step\s*[:\s]*(\d+)\s*\/\s*(\d+)/i) ||
-          partial.match(/(\d+)\s*\/\s*(\d+)\s*\[/);
-        const lossMatch =
-          partial.match(/['"]loss['"]\s*[:=]\s*([\d.]+)/i) ||
-          partial.match(/loss\s*[:=]\s*([\d.]+)/i);
+        // Extract latest step and loss from terminal output stream
+        const match = cell.content.match(/max_steps\s*=\s*(\d+)/i);
+        const cellMaxSteps = match ? parseInt(match[1], 10) : undefined;
+        const metrics = extractLatestTrainingMetrics(partial);
 
-        if (onTrainingProgress && (stepMatch || lossMatch)) {
+        if (onTrainingProgress && (metrics.step !== undefined || metrics.loss !== undefined)) {
           onTrainingProgress((prev: any) => {
-            const total = (stepMatch && stepMatch[2]) ? parseInt(stepMatch[2]) : (prev?.totalSteps || 75);
-            const step = stepMatch ? parseInt(stepMatch[1]) : (prev?.currentStep || 0);
-            const loss = lossMatch ? parseFloat(parseFloat(lossMatch[1]).toFixed(4)) : prev?.loss;
+            const total = cellMaxSteps || metrics.totalSteps || prev?.totalSteps || 50;
+            const step = metrics.step !== undefined ? metrics.step : (prev?.currentStep || 0);
+            const loss = metrics.loss !== undefined ? metrics.loss : prev?.loss;
             const pct = Math.min(100, Math.round((step / total) * 100));
             return {
               currentStep: step,
@@ -145,13 +141,14 @@ export function useNotebook(
         );
       },
       (plotPoint) => {
-        if (!plotPoint.vml_total_steps) {
-          const match = cell.content.match(/max_steps=(\d+)/);
-          if (match) plotPoint.vml_total_steps = parseInt(match[1]);
+        const match = cell.content.match(/max_steps\s*=\s*(\d+)/i);
+        const cellMaxSteps = match ? parseInt(match[1], 10) : undefined;
+        if (!plotPoint.vml_total_steps && cellMaxSteps) {
+          plotPoint.vml_total_steps = cellMaxSteps;
         }
         plotPoint.timestamp = Date.now();
 
-        const total = plotPoint.vml_total_steps || plotPoint.max_steps || plotPoint.total_steps || 75;
+        const total = cellMaxSteps || plotPoint.vml_total_steps || plotPoint.max_steps || plotPoint.total_steps || 50;
         const step = plotPoint.vml_step ?? plotPoint.step ?? plotPoint.global_step ?? 0;
         const pct = Math.min(100, Math.round((step / total) * 100));
         const lossVal = typeof plotPoint.loss === "number"

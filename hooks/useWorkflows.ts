@@ -4,6 +4,7 @@ import { CellData, ExecutionMode } from "../types";
 import { executeCode, fixCodeError, interruptExecution } from "../services/aiService";
 import { generateOnnxExportScript } from "../services/workflowService";
 import { API_BASE } from "../constants";
+import { extractLatestTrainingMetrics } from "../utils/notebookUtils";
 
 import { TopLevelView } from "../components/AppHeader";
 
@@ -211,8 +212,13 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
       setWorkflowMode("studio");
       setActiveView("workflow");
 
+      let hasError = false;
+
       for (const blockScript of blocks) {
-        if (stopWorkflowRef.current) break;
+        if (stopWorkflowRef.current) {
+          hasError = true;
+          break;
+        }
         const cellId = uuidv4();
         const modelPart =
           modelId
@@ -250,21 +256,12 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
         const result = await executeCode(
           blockScript,
           (partial) => {
-            // Extract loss or step from text output stream if available
-            const stepMatch =
-              partial.match(/vml_step['"]?\s*[:=]\s*(\d+)/i) ||
-              partial.match(/['"]step['"]\s*[:=]\s*(\d+)/i) ||
-              partial.match(/Step\s*[:\s]*(\d+)\s*\/\s*(\d+)/i) ||
-              partial.match(/(\d+)\s*\/\s*(\d+)\s*\[/);
-            const lossMatch =
-              partial.match(/['"]loss['"]\s*[:=]\s*([\d.]+)/i) ||
-              partial.match(/loss\s*[:=]\s*([\d.]+)/i);
-
-            if (stepMatch || lossMatch) {
+            const metrics = extractLatestTrainingMetrics(partial);
+            if (metrics.step !== undefined || metrics.loss !== undefined) {
               setTrainingProgress((prev) => {
-                const total = (stepMatch && stepMatch[2]) ? parseInt(stepMatch[2]) : (prev?.totalSteps || maxSteps || 20);
-                const step = stepMatch ? parseInt(stepMatch[1]) : (prev?.currentStep || 0);
-                const loss = lossMatch ? parseFloat(parseFloat(lossMatch[1]).toFixed(4)) : prev?.loss;
+                const total = maxSteps;
+                const step = metrics.step !== undefined ? metrics.step : (prev?.currentStep || 0);
+                const loss = metrics.loss !== undefined ? metrics.loss : prev?.loss;
                 const pct = Math.min(100, Math.round((step / total) * 100));
                 return {
                   currentStep: step,
@@ -283,7 +280,7 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
             );
           },
           (plotPoint) => {
-            const total = plotPoint.vml_total_steps || plotPoint.max_steps || maxSteps || 20;
+            const total = maxSteps;
             const step = plotPoint.vml_step ?? plotPoint.step ?? plotPoint.global_step ?? 0;
             const pct = Math.min(100, Math.round((step / total) * 100));
             const lossVal = typeof plotPoint.loss === "number"
@@ -329,6 +326,11 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
           )
         );
 
+        if (stopWorkflowRef.current) {
+          hasError = true;
+          break;
+        }
+
         if (result.text && result.text.includes("[VML_DEPLOYMENT_URL]")) {
           const urlMatch = result.text.match(
             /\[VML_DEPLOYMENT_URL\] (https:\/\/huggingface\.co\/[^\s]+)/
@@ -342,12 +344,20 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
           let recoverySuccess = false;
 
           for (let attempt = 1; attempt <= 3; attempt++) {
+            if (stopWorkflowRef.current) {
+              hasError = true;
+              break;
+            }
             const nextId = uuidv4();
             const nextCell: CellData = {
               id: nextId,
               type: "code",
               content: `// VML Agent Recovery Attempt ${attempt}/3...`,
               status: "running",
+              metadata: {
+                model_name: deploymentName,
+                model_slug: modelSlug,
+              },
             };
             setCells((prev) => [...prev, nextCell]);
 
@@ -389,6 +399,7 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
                 );
               },
               (plotPoint) => {
+                plotPoint.timestamp = Date.now();
                 setCells((prev) =>
                   prev.map((c) =>
                     c.id === nextId
@@ -425,18 +436,34 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
           }
 
           if (!recoverySuccess) {
+            hasError = true;
             break;
           }
         } else if (result.error) {
+          hasError = true;
           break;
         }
       }
 
-      setTrainingProgress((prev) =>
-        prev ? { ...prev, currentStep: prev.totalSteps, percentage: 100, isCompleted: true } : null
-      );
+      if (!stopWorkflowRef.current && !hasError) {
+        setTrainingProgress((prev) =>
+          prev
+            ? {
+                ...prev,
+                currentStep: prev.totalSteps,
+                percentage: 100,
+                isCompleted: true,
+              }
+            : null
+        );
+      } else {
+        setTrainingProgress(null);
+        setActiveTrainingSession(null);
+      }
     } catch (e) {
       console.error("SFT Failed:", e);
+      setTrainingProgress(null);
+      setActiveTrainingSession(null);
     } finally {
       setIsSftExecuting(false);
     }

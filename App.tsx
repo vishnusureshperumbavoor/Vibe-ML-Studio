@@ -14,6 +14,7 @@ import { useSkillsAndConnectors } from "./hooks/useSkillsAndConnectors";
 import { useDistillation } from "./hooks/useDistillation";
 import { useWorkflows } from "./hooks/useWorkflows";
 import { fetchSystemSpecs } from "./utils/apiUtils";
+import { interruptExecution } from "./services/aiService";
 
 export default function App() {
   const [activeView, setActiveView] = useState<TopLevelView>("gallery");
@@ -110,9 +111,36 @@ export default function App() {
   trainingProgressRef.current = setTrainingProgress;
 
   useEffect(() => {
+    // Reset any lingering background kernel process on fresh mount
+    interruptExecution().catch(() => {});
+
     fetchSystemSpecs().then((info) => {
       if (info) setSystemInfo(info);
     });
+
+    // Stop and interrupt active Python training immediately on page refresh or browser close
+    const handleUnload = () => {
+      try {
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon("http://127.0.0.1:2000/interrupt");
+        } else {
+          fetch("http://127.0.0.1:2000/interrupt", {
+            method: "POST",
+            keepalive: true,
+          }).catch(() => {});
+        }
+      } catch (e) {
+        console.warn("Unload interrupt failed:", e);
+      }
+    };
+
+    window.addEventListener("beforeunload", handleUnload);
+    window.addEventListener("pagehide", handleUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleUnload);
+      window.removeEventListener("pagehide", handleUnload);
+    };
   }, []);
 
   const handleOpenChat = (modelId?: string) => {
