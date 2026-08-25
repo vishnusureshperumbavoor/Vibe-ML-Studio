@@ -10,12 +10,10 @@ from dotenv import load_dotenv
 load_dotenv()
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
 
-CHAT_CACHE_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".vml_telegram_chat.json")
-
 class TelegramNotifier:
     def __init__(self):
         self.bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-        self.chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip() or self._load_cached_chat_id()
+        self.chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
         self.message_id = None
         self.last_update_time = 0
         self.min_update_interval = 2.0  # seconds between message edits
@@ -37,26 +35,12 @@ class TelegramNotifier:
         if self.enabled:
             self._start_background_listener()
 
-    def _load_cached_chat_id(self):
-        try:
-            if os.path.exists(CHAT_CACHE_FILE):
-                with open(CHAT_CACHE_FILE, "r") as f:
-                    data = json.load(f)
-                    return str(data.get("chat_id", ""))
-        except Exception:
-            pass
-        return ""
-
-    def _save_cached_chat_id(self, chat_id, user_name=""):
-        try:
-            self.chat_id = str(chat_id)
-            with open(CHAT_CACHE_FILE, "w") as f:
-                json.dump({"chat_id": self.chat_id, "user_name": user_name, "updated_at": time.time()}, f)
-            print(f"📡 Registered Telegram chat_id: {self.chat_id} ({user_name})")
-        except Exception as e:
-            print(f"⚠️ Failed to cache chat_id: {e}")
-
     def _resolve_chat_id(self):
+        if self.chat_id:
+            return self.chat_id
+
+        # Re-check env in case it was added
+        self.chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
         if self.chat_id:
             return self.chat_id
 
@@ -72,12 +56,12 @@ class TelegramNotifier:
                     latest = data["result"][-1]
                     message = latest.get("message") or latest.get("channel_post") or latest.get("edited_message")
                     if message and "chat" in message:
-                        cid = str(message["chat"]["id"])
-                        uname = message.get("from", {}).get("first_name", "User")
-                        self._save_cached_chat_id(cid, uname)
+                        self.chat_id = str(message["chat"]["id"])
                         return self.chat_id
-        except Exception as e:
-            print(f"⚠️ Telegram chat_id auto-discovery error: {e}")
+        except Exception:
+            pass
+
+        return None
 
         return None
 
@@ -126,8 +110,8 @@ class TelegramNotifier:
                                 user_name = msg.get("from", {}).get("first_name", "Friend")
                                 text = msg["text"].strip()
 
-                                # Auto-register chat_id
-                                self._save_cached_chat_id(chat_id, user_name)
+                                # Set chat_id in memory
+                                self.chat_id = chat_id
 
                                 if text.startswith("/start"):
                                     welcome = (
