@@ -70,7 +70,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                 Auto-Pilot Active
               </span>
             ) : (
-              "Your Personal AI R&D Agents"
+              "Vibe Training/Tuning platform"
             )}
           </span>
         </div>

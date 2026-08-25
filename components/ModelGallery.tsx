@@ -15,6 +15,8 @@ import {
   RefreshCw,
   Sliders,
   ChevronRight,
+  Trash2,
+  AlertTriangle,
 } from "lucide-react";
 import { ChatView } from "./ChatView";
 
@@ -51,6 +53,11 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
   const [activeFilter, setActiveFilter] = useState<"all" | "adapter" | "base" | "onnx">("all");
   const [activeChatModel, setActiveChatModel] = useState<string | null>(initialSelectedModel || null);
 
+  // Model Deletion State
+  const [modelToDelete, setModelToDelete] = useState<GalleryModelItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   useEffect(() => {
     if (initialSelectedModel) {
       setActiveChatModel(initialSelectedModel);
@@ -69,6 +76,36 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
       console.error("Failed fetching gallery models:", e);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleDeleteModel = async () => {
+    if (!modelToDelete) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch("http://127.0.0.1:2000/delete_model", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: modelToDelete.name,
+          type: modelToDelete.type,
+          lora_slug: modelToDelete.lora_slug,
+          onnx_slug: modelToDelete.onnx_slug,
+        }),
+      });
+
+      if (res.ok) {
+        setModelToDelete(null);
+        await fetchModels();
+      } else {
+        const data = await res.json();
+        setDeleteError(data.detail || "Failed to delete model.");
+      }
+    } catch (e: any) {
+      setDeleteError(e.message || "Failed to communicate with server.");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -318,7 +355,7 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
                 <div
                   key={idx}
                   onClick={() => setActiveChatModel(model.name)}
-                  className={`group rounded-3xl bg-[#140F1D] border transition-all duration-300 p-6 flex flex-col justify-between space-y-6 relative overflow-hidden shadow-xl hover:shadow-2xl cursor-pointer ${
+                  className={`group rounded-3xl bg-[#140F1D] border transition-all duration-300 p-5 pt-4 flex flex-col justify-between space-y-4 relative overflow-hidden shadow-xl hover:shadow-2xl cursor-pointer ${
                     isLoRA
                       ? "border-amber-500/20 hover:border-amber-500/50 hover:shadow-amber-500/5"
                       : isBase
@@ -338,7 +375,7 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
                   />
 
                   {/* Card Header */}
-                  <div className="space-y-3 relative z-10">
+                  <div className="space-y-2.5 relative z-10">
                     <div className="flex items-center justify-between gap-2">
                       <span
                         className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border flex items-center gap-1.5 ${
@@ -367,16 +404,30 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
                         )}
                       </span>
 
-                      {model.size_mb !== undefined && (
-                        <span className="text-[11px] font-mono text-white/50 flex items-center gap-1">
-                          <HardDrive size={11} />
-                          <span>
-                            {model.size_mb > 1024
-                              ? `${(model.size_mb / 1024).toFixed(2)} GB`
-                              : `${model.size_mb} MB`}
+                      <div className="flex items-center gap-2">
+                        {model.size_mb !== undefined && (
+                          <span className="text-[11px] font-mono text-white/50 flex items-center gap-1">
+                            <HardDrive size={11} />
+                            <span>
+                              {model.size_mb > 1024
+                                ? `${(model.size_mb / 1024).toFixed(2)} GB`
+                                : `${model.size_mb} MB`}
+                            </span>
                           </span>
-                        </span>
-                      )}
+                        )}
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setModelToDelete(model);
+                            setDeleteError(null);
+                          }}
+                          className="p-1.5 rounded-xl text-white/30 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer"
+                          title="Delete Model"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
                     </div>
 
                     <div>
@@ -453,6 +504,60 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {modelToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-md bg-[#140F1D] border border-red-500/30 rounded-3xl p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3 text-red-400">
+              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-2xl">
+                <Trash2 size={24} />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Delete Model</h3>
+                <p className="text-xs text-white/40">This action permanently deletes model weights.</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-white/70 leading-relaxed bg-[#0B090F] p-4 rounded-2xl border border-white/5 font-mono">
+              Are you sure you want to delete <strong className="text-white">{modelToDelete.display_name || modelToDelete.name}</strong>?
+              {modelToDelete.size_mb !== undefined && (
+                <span className="block mt-1 text-white/40">
+                  This will free {modelToDelete.size_mb > 1024 ? `${(modelToDelete.size_mb / 1024).toFixed(2)} GB` : `${modelToDelete.size_mb} MB`} of disk space.
+                </span>
+              )}
+            </p>
+
+            {deleteError && (
+              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs flex items-center gap-2">
+                <AlertTriangle size={14} className="shrink-0" />
+                <span>{deleteError}</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                onClick={() => {
+                  setModelToDelete(null);
+                  setDeleteError(null);
+                }}
+                disabled={isDeleting}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white/60 hover:text-white hover:bg-white/5 transition-all cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteModel}
+                disabled={isDeleting}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition-all shadow-lg shadow-red-900/30 cursor-pointer disabled:opacity-50"
+              >
+                {isDeleting ? <RefreshCw size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                <span>{isDeleting ? "Deleting..." : "Delete Model"}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -74,6 +74,12 @@ class NativeChatRequest(BaseModel):
     messages: List[dict]
     lora_slug: Optional[str] = None
 
+class DeleteModelRequest(BaseModel):
+    name: str
+    type: str
+    lora_slug: Optional[str] = None
+    onnx_slug: Optional[str] = None
+
 class ImageGenerateRequest(BaseModel):
     prompt: str
     model_id: Optional[str] = "runwayml/stable-diffusion-v1-5"
@@ -640,6 +646,46 @@ async def list_native_models():
                     })
                     
     return {"models": results}
+ 
+ 
+@app.post("/delete_model")
+async def delete_model(req: DeleteModelRequest):
+    """
+    Deletes a local model from disk.
+    """
+    try:
+        import shutil
+        if req.type == "adapter" and req.lora_slug:
+            target_dir = os.path.join(ADAPTERS_DIR, req.lora_slug)
+            if os.path.exists(target_dir):
+                shutil.rmtree(target_dir)
+                return {"status": "success", "message": f"Adapter {req.lora_slug} deleted successfully."}
+            else:
+                raise HTTPException(status_code=404, detail="Adapter directory not found.")
+                
+        elif req.type == "base":
+            target_file = os.path.join(GGUF_DIR, req.name)
+            if os.path.exists(target_file):
+                os.remove(target_file)
+                return {"status": "success", "message": f"Base model {req.name} deleted successfully."}
+            else:
+                raise HTTPException(status_code=404, detail="Base model file not found.")
+                
+        elif req.type == "onnx" and req.onnx_slug:
+            target_dir = os.path.join(ONNX_DIR, req.onnx_slug)
+            if os.path.exists(target_dir):
+                shutil.rmtree(target_dir)
+                return {"status": "success", "message": f"ONNX model {req.onnx_slug} deleted successfully."}
+            else:
+                raise HTTPException(status_code=404, detail="ONNX model directory not found.")
+                
+        else:
+            raise HTTPException(status_code=400, detail="Invalid model deletion request.")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/save_token")
