@@ -43,6 +43,11 @@ class KernelManager:
                 pass
             self.process = None
 
+    async def interrupt(self):
+        """Interrupts and terminates the active kernel process immediately."""
+        await self.stop()
+        print("Kernel process successfully interrupted.")
+
     async def execute(self, code: str):
         """Executes a block of code and yields output until finished."""
         async with self.lock:

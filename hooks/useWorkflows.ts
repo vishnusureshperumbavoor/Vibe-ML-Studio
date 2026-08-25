@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { CellData, ExecutionMode } from "../types";
-import { executeCode, fixCodeError } from "../services/aiService";
+import { executeCode, fixCodeError, interruptExecution } from "../services/aiService";
 import { generateOnnxExportScript } from "../services/workflowService";
 import { API_BASE } from "../constants";
 
@@ -46,6 +46,30 @@ export function useWorkflows({
     maxSteps: number;
     startTime: number;
   } | null>(null);
+
+  const stopWorkflowRef = useRef(false);
+
+  const handleStopWorkflow = async () => {
+    stopWorkflowRef.current = true;
+    await interruptExecution();
+    setIsSftExecuting(false);
+    setIsQuantizing(false);
+    setIsOnnxExecuting(false);
+    setTrainingProgress(null);
+    setActiveTrainingSession(null);
+    setThinking(null);
+    setCells((prev) =>
+      prev.map((c) =>
+        c.status === "running"
+          ? {
+              ...c,
+              status: "error",
+              output: (c.output || "") + "\n\n[🛑 EXECUTION STOPPED BY USER]",
+            }
+          : c
+      )
+    );
+  };
 
   // Screen Wake Lock: prevents OS sleep and browser throttling while training is executing
   useEffect(() => {
@@ -143,6 +167,7 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
     rank: number
   ) => {
     setIsSftExecuting(true);
+    stopWorkflowRef.current = false;
     setDeploymentUrl(null);
     setWorkflowModelFilename(null);
     const cleanModelName = modelId.split("/").pop() || modelId;
@@ -187,6 +212,7 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
       setActiveView("workflow");
 
       for (const blockScript of blocks) {
+        if (stopWorkflowRef.current) break;
         const cellId = uuidv4();
         const modelPart =
           modelId
@@ -225,20 +251,28 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
           blockScript,
           (partial) => {
             // Extract loss or step from text output stream if available
-            const stepMatch = partial.match(/'step':\s*(\d+)/) || partial.match(/Step\s*(\d+)\/(\d+)/i);
-            const lossMatch = partial.match(/'loss':\s*([\d.]+)/) || partial.match(/loss:\s*([\d.]+)/i);
+            const stepMatch =
+              partial.match(/vml_step['"]?\s*[:=]\s*(\d+)/i) ||
+              partial.match(/['"]step['"]\s*[:=]\s*(\d+)/i) ||
+              partial.match(/Step\s*[:\s]*(\d+)\s*\/\s*(\d+)/i) ||
+              partial.match(/(\d+)\s*\/\s*(\d+)\s*\[/);
+            const lossMatch =
+              partial.match(/['"]loss['"]\s*[:=]\s*([\d.]+)/i) ||
+              partial.match(/loss\s*[:=]\s*([\d.]+)/i);
+
             if (stepMatch || lossMatch) {
               setTrainingProgress((prev) => {
-                if (!prev) return prev;
-                const step = stepMatch ? parseInt(stepMatch[1]) : prev.currentStep;
-                const total = prev.totalSteps;
-                const loss = lossMatch ? parseFloat(parseFloat(lossMatch[1]).toFixed(4)) : prev.loss;
+                const total = (stepMatch && stepMatch[2]) ? parseInt(stepMatch[2]) : (prev?.totalSteps || maxSteps || 20);
+                const step = stepMatch ? parseInt(stepMatch[1]) : (prev?.currentStep || 0);
+                const loss = lossMatch ? parseFloat(parseFloat(lossMatch[1]).toFixed(4)) : prev?.loss;
                 const pct = Math.min(100, Math.round((step / total) * 100));
                 return {
-                  ...prev,
                   currentStep: step,
-                  loss: loss !== undefined ? loss : prev.loss,
+                  totalSteps: total,
+                  loss: loss !== undefined ? loss : prev?.loss,
                   percentage: pct,
+                  modelName: prev?.modelName || cleanModelName,
+                  isCompleted: false,
                 };
               });
             }
@@ -249,19 +283,23 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
             );
           },
           (plotPoint) => {
-            const total = plotPoint.vml_total_steps || maxSteps || 20;
-            const step = plotPoint.step ?? 0;
+            const total = plotPoint.vml_total_steps || plotPoint.max_steps || maxSteps || 20;
+            const step = plotPoint.vml_step ?? plotPoint.step ?? plotPoint.global_step ?? 0;
             const pct = Math.min(100, Math.round((step / total) * 100));
-            const lossVal = typeof plotPoint.loss === "number" ? Number(plotPoint.loss.toFixed(4)) : undefined;
+            const lossVal = typeof plotPoint.loss === "number"
+              ? Number(plotPoint.loss.toFixed(4))
+              : typeof plotPoint.train_loss === "number"
+              ? Number(plotPoint.train_loss.toFixed(4))
+              : undefined;
 
-            setTrainingProgress({
+            setTrainingProgress((prev) => ({
               currentStep: step,
               totalSteps: total,
-              loss: lossVal,
+              loss: lossVal !== undefined ? lossVal : prev?.loss,
               percentage: pct,
-              modelName: cleanModelName,
+              modelName: prev?.modelName || cleanModelName,
               isCompleted: false,
-            });
+            }));
 
             if (!plotPoint.vml_total_steps) {
               const match = blockScript.match(/max_steps=(\d+)/);
@@ -620,5 +658,6 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
     handleStartOnnx,
     handleStartDeployment,
     handleStartGeneration,
+    handleStopWorkflow,
   };
 }

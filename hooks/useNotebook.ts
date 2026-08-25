@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { CellData, CellType, ExecutionMode, ConnectorConfig } from "../types";
-import { executeCode, generateNotebookStructure } from "../services/aiService";
+import { executeCode, generateNotebookStructure, interruptExecution } from "../services/aiService";
 import { VMLAgent } from "../services/vmlAgent";
 import {
   QueryHistoryEntry,
@@ -9,7 +9,10 @@ import {
   reconcileQueryCells,
 } from "../utils/notebookUtils";
 
-export function useNotebook(connectorSettings: ConnectorConfig[]) {
+export function useNotebook(
+  connectorSettings: ConnectorConfig[],
+  onTrainingProgress?: (updater: (prev: any) => any) => void
+) {
   const [cells, setCells] = useState<CellData[]>([]);
   const cellsRef = useRef<CellData[]>([]);
   const queryHistoryRef = useRef<QueryHistoryEntry[]>([]);
@@ -43,37 +46,32 @@ export function useNotebook(connectorSettings: ConnectorConfig[]) {
     };
 
     setCells((prev) => {
-      const newCells = [...prev];
-      const insertAt = index !== undefined ? index : prev.length;
-      newCells.splice(insertAt, 0, newCell);
-      return newCells;
+      const updated = [...prev];
+      if (typeof index === "number" && index >= 0) {
+        updated.splice(index, 0, newCell);
+      } else {
+        updated.push(newCell);
+      }
+      return updated;
     });
     setActiveCellId(newCell.id);
   };
 
   const updateCellContent = (id: string, content: string) => {
-    setCells((prev) => prev.map((c) => (c.id === id ? { ...c, content } : c)));
+    setCells((prev) =>
+      prev.map((cell) => (cell.id === id ? { ...cell, content } : cell))
+    );
   };
 
   const updateCellType = (id: string, type: CellType) => {
     setCells((prev) =>
-      prev.map((c) =>
-        c.id === id ? { ...c, type, output: undefined, status: "idle" } : c
-      )
+      prev.map((cell) => (cell.id === id ? { ...cell, type } : cell))
     );
   };
 
   const deleteCell = (id: string) => {
+    setCells((prev) => prev.filter((cell) => cell.id !== id));
     if (activeCellId === id) setActiveCellId(null);
-    setCells((prev) => {
-      const updated = prev.filter((c) => c.id !== id);
-      cellsRef.current = updated;
-      queryHistoryRef.current = queryHistoryRef.current.filter(
-        (entry) => entry.cell.id !== id
-      );
-      queryHistoryRef.current = syncQueryIndexes(queryHistoryRef.current, updated);
-      return updated;
-    });
   };
 
   const clearAll = () => {
@@ -87,18 +85,17 @@ export function useNotebook(connectorSettings: ConnectorConfig[]) {
   };
 
   const moveCell = (id: string, direction: "up" | "down") => {
-    const index = cells.findIndex((c) => c.id === id);
-    if (index === -1) return;
-    if (direction === "up" && index === 0) return;
-    if (direction === "down" && index === cells.length - 1) return;
+    setCells((prev) => {
+      const index = prev.findIndex((c) => c.id === id);
+      if (index === -1) return prev;
+      const targetIndex = direction === "up" ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
 
-    const newCells = [...cells];
-    const targetIndex = direction === "up" ? index - 1 : index + 1;
-    [newCells[index], newCells[targetIndex]] = [
-      newCells[targetIndex],
-      newCells[index],
-    ];
-    setCells(newCells);
+      const newCells = [...prev];
+      const [moved] = newCells.splice(index, 1);
+      newCells.splice(targetIndex, 0, moved);
+      return newCells;
+    });
   };
 
   const executeSingleCell = async (
@@ -106,7 +103,7 @@ export function useNotebook(connectorSettings: ConnectorConfig[]) {
   ): Promise<{ success: boolean; output: string }> => {
     setCells((prev) =>
       prev.map((c) =>
-        c.id === id ? { ...c, status: "running", output: undefined } : c
+        c.id === id ? { ...c, status: "running", output: "" } : c
       )
     );
 
@@ -116,6 +113,33 @@ export function useNotebook(connectorSettings: ConnectorConfig[]) {
     const localResult = await executeCode(
       cell.content,
       (partial) => {
+        // Extract step and loss from terminal output stream
+        const stepMatch =
+          partial.match(/vml_step['"]?\s*[:=]\s*(\d+)/i) ||
+          partial.match(/['"]step['"]\s*[:=]\s*(\d+)/i) ||
+          partial.match(/Step\s*[:\s]*(\d+)\s*\/\s*(\d+)/i) ||
+          partial.match(/(\d+)\s*\/\s*(\d+)\s*\[/);
+        const lossMatch =
+          partial.match(/['"]loss['"]\s*[:=]\s*([\d.]+)/i) ||
+          partial.match(/loss\s*[:=]\s*([\d.]+)/i);
+
+        if (onTrainingProgress && (stepMatch || lossMatch)) {
+          onTrainingProgress((prev: any) => {
+            const total = (stepMatch && stepMatch[2]) ? parseInt(stepMatch[2]) : (prev?.totalSteps || 75);
+            const step = stepMatch ? parseInt(stepMatch[1]) : (prev?.currentStep || 0);
+            const loss = lossMatch ? parseFloat(parseFloat(lossMatch[1]).toFixed(4)) : prev?.loss;
+            const pct = Math.min(100, Math.round((step / total) * 100));
+            return {
+              currentStep: step,
+              totalSteps: total,
+              loss: loss !== undefined ? loss : prev?.loss,
+              percentage: pct,
+              modelName: prev?.modelName || "Training Model",
+              isCompleted: false,
+            };
+          });
+        }
+
         setCells((prev) =>
           prev.map((c) => (c.id === id ? { ...c, output: partial } : c))
         );
@@ -126,6 +150,26 @@ export function useNotebook(connectorSettings: ConnectorConfig[]) {
           if (match) plotPoint.vml_total_steps = parseInt(match[1]);
         }
         plotPoint.timestamp = Date.now();
+
+        const total = plotPoint.vml_total_steps || plotPoint.max_steps || plotPoint.total_steps || 75;
+        const step = plotPoint.vml_step ?? plotPoint.step ?? plotPoint.global_step ?? 0;
+        const pct = Math.min(100, Math.round((step / total) * 100));
+        const lossVal = typeof plotPoint.loss === "number"
+          ? Number(plotPoint.loss.toFixed(4))
+          : typeof plotPoint.train_loss === "number"
+          ? Number(plotPoint.train_loss.toFixed(4))
+          : undefined;
+
+        if (onTrainingProgress && step > 0) {
+          onTrainingProgress((prev: any) => ({
+            currentStep: step,
+            totalSteps: total,
+            loss: lossVal !== undefined ? lossVal : prev?.loss,
+            percentage: pct,
+            modelName: prev?.modelName || "Training Model",
+            isCompleted: step >= total && total > 0,
+          }));
+        }
 
         setCells((prev) =>
           prev.map((c) =>
@@ -159,12 +203,24 @@ export function useNotebook(connectorSettings: ConnectorConfig[]) {
     await executeSingleCell(id);
   };
 
-  const handleStop = () => {
+  const handleStop = async () => {
     stopExecutionRef.current = true;
     stopAgentRef.current = true;
     setIsAutoRunning(false);
     setIsGenerating(false);
     setThinking(null);
+    await interruptExecution();
+    setCells((prev) =>
+      prev.map((c) =>
+        c.status === "running"
+          ? {
+              ...c,
+              status: "error",
+              output: (c.output || "") + "\n\n[🛑 EXECUTION STOPPED BY USER]",
+            }
+          : c
+      )
+    );
   };
 
   const submitPrompt = async (

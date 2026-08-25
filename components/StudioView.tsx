@@ -4,6 +4,7 @@ import {
   Zap,
   Database,
   Sparkles,
+  Square,
 } from "lucide-react";
 import { Cell } from "./Cell";
 import { CellData, CellType } from "../types";
@@ -30,6 +31,7 @@ interface StudioViewProps {
   onTypeChangeCell: (id: string, type: CellType) => void;
   onOpenArena: (modelId: string) => void;
   onDismissClarification: () => void;
+  onStopExecution?: () => void;
 }
 
 export const StudioView: React.FC<StudioViewProps> = ({
@@ -49,6 +51,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
   onTypeChangeCell,
   onOpenArena,
   onDismissClarification,
+  onStopExecution,
 }) => {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -88,25 +91,38 @@ export const StudioView: React.FC<StudioViewProps> = ({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-8 pr-4">
-                  <div className="flex flex-col border-l border-white/5 pl-8">
-                    <span className="text-[8px] font-bold text-white/20 uppercase tracking-[0.2em] mb-1">
-                      Knowledge Source
-                    </span>
-                    <span className="text-xs font-black text-white/70 flex items-center gap-2">
-                      <Database size={10} className="text-purple-500" />
-                      {activeTrainingSession.datasetId.split("/").pop()}
-                    </span>
+                <div className="flex items-center gap-6">
+                  <div className="flex items-center gap-8 pr-2">
+                    <div className="flex flex-col border-l border-white/5 pl-8">
+                      <span className="text-[8px] font-bold text-white/20 uppercase tracking-[0.2em] mb-1">
+                        Knowledge Source
+                      </span>
+                      <span className="text-xs font-black text-white/70 flex items-center gap-2">
+                        <Database size={10} className="text-purple-500" />
+                        {activeTrainingSession.datasetId.split("/").pop()}
+                      </span>
+                    </div>
+                    <div className="flex flex-col border-l border-white/5 pl-8">
+                      <span className="text-[8px] font-bold text-white/20 uppercase tracking-[0.2em] mb-1">
+                        Training Target
+                      </span>
+                      <span className="text-xs font-black text-white/70 flex items-center gap-2 uppercase tracking-widest">
+                        <Zap size={10} className="text-amber-500" />
+                        {activeTrainingSession.maxSteps} Steps
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex flex-col border-l border-white/5 pl-8">
-                    <span className="text-[8px] font-bold text-white/20 uppercase tracking-[0.2em] mb-1">
-                      Training Target
-                    </span>
-                    <span className="text-xs font-black text-white/70 flex items-center gap-2 uppercase tracking-widest">
-                      <Zap size={10} className="text-amber-500" />
-                      {activeTrainingSession.maxSteps} Steps
-                    </span>
-                  </div>
+
+                  {onStopExecution && (
+                    <button
+                      onClick={onStopExecution}
+                      className="px-4 py-2.5 rounded-2xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition-all shadow-lg shadow-red-900/30 flex items-center gap-2 cursor-pointer hover:scale-105 active:scale-95"
+                      title="Stop Training Process Immediately"
+                    >
+                      <Square size={13} fill="currentColor" />
+                      <span>Stop Process</span>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

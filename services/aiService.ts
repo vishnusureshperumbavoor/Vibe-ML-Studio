@@ -53,6 +53,18 @@ export async function callKimi(messages: any[], temperature = 0.1) {
   }
 }
 
+export const interruptExecution = async (): Promise<boolean> => {
+  try {
+    const response = await fetch("http://127.0.0.1:2000/interrupt", {
+      method: "POST",
+    });
+    return response.ok;
+  } catch (error) {
+    console.error("Failed to interrupt execution:", error);
+    return false;
+  }
+};
+
 export const executeCode = async (
     code: string, 
     onProgress?: (text: string) => void,

@@ -33,6 +33,7 @@ interface WorkflowViewProps {
     rank: number
   ) => void;
   onNavigateToChat: (model?: string) => void;
+  onStopWorkflow?: () => void;
 
   // Studio Notebook Props
   cells: CellData[];
@@ -78,6 +79,7 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
   setSftRank,
   onStartSFT,
   onNavigateToChat,
+  onStopWorkflow,
 
   cells,
   activeCellId,
@@ -141,6 +143,7 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
           <div className="absolute top-0 right-0 p-12 bg-amber-500/5 blur-[120px] rounded-full group-hover:bg-amber-500/10 transition-colors duration-1000" />
           <FineTuningPanel
             onStart={onStartSFT}
+            onStop={onStopWorkflow}
             isExecuting={isWorkflowExecuting}
             systemInfo={systemInfo}
             preSelectedDataset={preSelectedDataset}
@@ -178,6 +181,7 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
             onTypeChangeCell={onTypeChangeCell}
             onOpenArena={onNavigateToChat}
             onDismissClarification={onDismissClarification}
+            onStopExecution={onStopWorkflow}
           />
         </div>
       )}

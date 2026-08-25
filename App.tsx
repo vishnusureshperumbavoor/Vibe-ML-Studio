@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import ManageSkillsPanel from "./components/ManageSkillsPanel";
 import { KnowledgeLibrary } from "./components/KnowledgeLibrary";
 import { ThinkingView } from "./components/ThinkingView";
@@ -40,6 +40,8 @@ export default function App() {
     pluginDefinitions,
   } = useSkillsAndConnectors();
 
+  const trainingProgressRef = useRef<any>(null);
+
   const {
     cells,
     setCells,
@@ -59,7 +61,7 @@ export default function App() {
     moveCell,
     handleManualRun,
     handleStop,
-  } = useNotebook(connectorSettings);
+  } = useNotebook(connectorSettings, (updater) => trainingProgressRef.current?.(updater));
 
   const {
     distillStatus,
@@ -77,6 +79,7 @@ export default function App() {
     isQuantizing,
     isOnnxExecuting,
     trainingProgress,
+    setTrainingProgress,
     deploymentUrl,
     workflowModelFilename,
     lastGeneratedImage,
@@ -95,6 +98,7 @@ export default function App() {
     handleStartQuantization,
     handleStartOnnx,
     handleStartGeneration,
+    handleStopWorkflow,
   } = useWorkflows({
     setCells,
     setActiveView,
@@ -102,6 +106,8 @@ export default function App() {
     setThinkingHistory,
     mode: "agent",
   });
+
+  trainingProgressRef.current = setTrainingProgress;
 
   useEffect(() => {
     fetchSystemSpecs().then((info) => {
@@ -133,6 +139,7 @@ export default function App() {
           setActiveView("workflow");
           setWorkflowMode("studio");
         }}
+        onStopTraining={handleStopWorkflow}
       />
 
       {/* Main Content Area */}
@@ -183,6 +190,7 @@ export default function App() {
             sftRank={sftRank}
             setSftRank={setSftRank}
             onStartSFT={handleStartSFT}
+            onStopWorkflow={handleStopWorkflow}
             onNavigateToChat={handleOpenChat}
             cells={cells}
             activeCellId={activeCellId}

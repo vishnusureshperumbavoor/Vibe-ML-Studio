@@ -8,6 +8,7 @@ import {
   BarChart2,
   Cpu,
   LayoutGrid,
+  Square,
 } from "lucide-react";
 import { Button } from "./Button";
 import { TrainingProgress } from "../hooks/useWorkflows";
@@ -30,6 +31,7 @@ interface AppHeaderProps {
   onStopAutoPilot: () => void;
   trainingProgress?: TrainingProgress | null;
   onViewTraining?: () => void;
+  onStopTraining?: () => void;
 }
 
 export const AppHeader: React.FC<AppHeaderProps> = ({
@@ -39,85 +41,82 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   onStopAutoPilot,
   trainingProgress,
   onViewTraining,
+  onStopTraining,
 }) => {
   return (
     <header className="flex-none h-14 border-b border-[#352554] bg-[#140F1D] flex items-center px-4 justify-between z-20 sticky top-0 relative">
       <div className="flex items-center gap-3">
-        <div
-          className={`h-8 w-8 rounded-lg flex items-center justify-center text-white shadow-lg transition-all duration-500 ${
-            isAutoRunning
-              ? "bg-gradient-to-br from-green-400 to-emerald-600 shadow-emerald-900/20"
-              : "bg-gradient-to-br from-indigo-500 to-purple-600 shadow-purple-900/20"
-          }`}
-        >
-          {isAutoRunning ? (
-            <Zap size={16} className="animate-pulse" />
-          ) : (
-            <Sparkles size={16} />
-          )}
+        <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-purple-500/20">
+          <Sparkles className="text-white" size={18} />
         </div>
         <div>
-          <h1 className="text-sm font-semibold text-[#E2D8F0] tracking-wide">
-            Vibe ML Agent Studio
-          </h1>
-          <span className="text-xs text-[#9480B3] flex items-center gap-2">
-            {isAutoRunning ? (
-              <span className="text-emerald-400 flex items-center gap-1">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-                Auto-Pilot Active
-              </span>
-            ) : (
-              "Vibe Training/Tuning platform"
-            )}
+          <span className="font-bold tracking-tight text-white block text-sm flex items-center gap-1.5">
+            VML STUDIO
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono font-normal">
+              v2.0
+            </span>
+          </span>
+          <span className="text-[10px] text-gray-500 block leading-none">
+            Local SLM Post-Training & Distillation IDE
           </span>
         </div>
       </div>
 
       {/* Live Training Progress Pill Badge (Visible across all tabs) */}
       {trainingProgress && (
-        <button
-          onClick={onViewTraining}
-          className="flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-[#1C1528] border border-amber-500/30 hover:border-amber-500/70 hover:bg-[#251b36] transition-all cursor-pointer shadow-lg shadow-amber-500/10 group animate-in fade-in zoom-in duration-300"
-          title="Click to view Studio Notebook"
-        >
-          <span className="relative flex h-2 w-2">
-            {trainingProgress.isCompleted ? (
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
-            ) : (
-              <>
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-              </>
-            )}
-          </span>
-
-          <span className="text-xs font-bold text-amber-300 font-mono tracking-tight flex items-center gap-1.5">
-            {trainingProgress.isCompleted ? (
-              <span className="text-emerald-300">✅ Training Complete (100%)</span>
-            ) : (
-              <>
-                <span>🚀 Training:</span>
-                <span className="text-amber-200">
-                  Step {trainingProgress.currentStep}/{trainingProgress.totalSteps}
-                </span>
-                <span className="text-amber-400/80 font-bold">({trainingProgress.percentage}%)</span>
-              </>
-            )}
-          </span>
-
-          {trainingProgress.loss !== undefined && !trainingProgress.isCompleted && (
-            <span className="text-xs text-white/50 font-mono pl-2 border-l border-[#352554]">
-              Loss: <span className="text-amber-200 font-semibold">{trainingProgress.loss}</span>
+        <div className="flex items-center gap-1.5 animate-in fade-in zoom-in duration-300">
+          <button
+            onClick={onViewTraining}
+            className="flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-[#1C1528] border border-amber-500/30 hover:border-amber-500/70 hover:bg-[#251b36] transition-all cursor-pointer shadow-lg shadow-amber-500/10 group"
+            title="Click to view Studio Notebook"
+          >
+            <span className="relative flex h-2 w-2">
+              {trainingProgress.isCompleted ? (
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
+              ) : (
+                <>
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                </>
+              )}
             </span>
-          )}
 
-          <span className="text-[10px] text-amber-400/70 uppercase font-black tracking-wider group-hover:text-amber-300 group-hover:translate-x-0.5 transition-all ml-1 hidden sm:inline">
-            Studio →
-          </span>
-        </button>
+            <span className="text-xs font-bold text-amber-300 font-mono tracking-tight flex items-center gap-1.5">
+              {trainingProgress.isCompleted ? (
+                <span className="text-emerald-300">✅ Training Complete (100%)</span>
+              ) : (
+                <>
+                  <span>🚀 Training:</span>
+                  <span className="text-amber-200">
+                    Step {trainingProgress.currentStep}/{trainingProgress.totalSteps}
+                  </span>
+                  <span className="text-amber-400/80 font-bold">({trainingProgress.percentage}%)</span>
+                </>
+              )}
+            </span>
+
+            {trainingProgress.loss !== undefined && !trainingProgress.isCompleted && (
+              <span className="text-xs text-white/50 font-mono pl-2 border-l border-[#352554]">
+                Loss: <span className="text-amber-200 font-semibold">{trainingProgress.loss}</span>
+              </span>
+            )}
+
+            <span className="text-[10px] text-amber-400/70 uppercase font-black tracking-wider group-hover:text-amber-300 group-hover:translate-x-0.5 transition-all ml-1 hidden sm:inline">
+              Studio →
+            </span>
+          </button>
+
+          {!trainingProgress.isCompleted && onStopTraining && (
+            <button
+              onClick={onStopTraining}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-red-500/10 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/30 text-xs font-bold transition-all shadow-md cursor-pointer hover:scale-105 active:scale-95"
+              title="Stop Training Process Immediately"
+            >
+              <Square size={12} fill="currentColor" />
+              <span>Stop</span>
+            </button>
+          )}
+        </div>
       )}
 
       <div className="flex items-center gap-2">

@@ -1,9 +1,10 @@
 import React, { useEffect } from 'react';
-import { Zap, Activity, CheckCircle2, ExternalLink } from 'lucide-react';
+import { Zap, Activity, CheckCircle2, ExternalLink, Square } from 'lucide-react';
 import { SmartSelector } from './SmartSelector';
 
 interface FineTuningPanelProps {
   onStart: (modelId: string, datasetId: string, hardware: string, maxSteps: number, rank: number) => void;
+  onStop?: () => void;
   isExecuting: boolean;
   systemInfo?: any;
   preSelectedDataset?: string | null;
@@ -24,6 +25,7 @@ interface FineTuningPanelProps {
 
 export const FineTuningPanel: React.FC<FineTuningPanelProps> = ({ 
   onStart, 
+  onStop,
   isExecuting, 
   systemInfo, 
   preSelectedDataset,
@@ -229,27 +231,28 @@ export const FineTuningPanel: React.FC<FineTuningPanelProps> = ({
         </div>
       </div>
 
-      <button
-        disabled={!modelId || !datasetId || isExecuting}
-        onClick={() => onStart(modelId, datasetId, hardware, maxSteps, rank)}
-        className={`w-full py-4 rounded-2xl flex items-center justify-center gap-3 font-bold text-sm transition-all shadow-2xl scale-100 active:scale-95
-          ${!modelId || !datasetId || isExecuting 
-            ? 'bg-white/5 text-white/20 cursor-not-allowed border border-white/5' 
-            : 'bg-amber-500 text-black hover:bg-amber-400 hover:shadow-amber-500/20'}
-        `}
-      >
-        {isExecuting ? (
-          <>
-            <div className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
-            <span>TRAINING IN PROGRESS...</span>
-          </>
-        ) : (
-          <>
-            <Zap size={18} fill="currentColor" />
-            <span>START SUPERVISED FINE-TUNING</span>
-          </>
-        )}
-      </button>
+      {isExecuting ? (
+        <button
+          onClick={onStop}
+          className="w-full py-4 rounded-2xl flex items-center justify-center gap-3 font-bold text-sm transition-all shadow-2xl scale-100 active:scale-95 bg-red-600 hover:bg-red-500 text-white shadow-red-900/30 cursor-pointer"
+        >
+          <Square size={18} fill="currentColor" />
+          <span>STOP TRAINING PROCESS</span>
+        </button>
+      ) : (
+        <button
+          disabled={!modelId || !datasetId}
+          onClick={() => onStart(modelId, datasetId, hardware, maxSteps, rank)}
+          className={`w-full py-4 rounded-2xl flex items-center justify-center gap-3 font-bold text-sm transition-all shadow-2xl scale-100 active:scale-95
+            ${!modelId || !datasetId 
+              ? 'bg-white/5 text-white/20 cursor-not-allowed border border-white/5' 
+              : 'bg-amber-500 text-black hover:bg-amber-400 hover:shadow-amber-500/20 cursor-pointer'}
+          `}
+        >
+          <Zap size={18} fill="currentColor" />
+          <span>START SUPERVISED FINE-TUNING</span>
+        </button>
+      )}
       
       <div className="flex items-center justify-center gap-2 text-[10px] text-white/20 pt-2">
         <Activity size={10} />

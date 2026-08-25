@@ -214,6 +214,17 @@ async def list_skills():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/interrupt")
+async def interrupt_execution():
+    """
+    Interrupts and halts any active running code block in the interactive Python kernel.
+    """
+    try:
+        await kernel_manager.interrupt()
+        return {"status": "success", "message": "Kernel process interrupted."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/read_file")
 async def read_file(req: FileReadRequest):
     try:
