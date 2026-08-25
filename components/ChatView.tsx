@@ -383,6 +383,138 @@ const renderMessageList = (
   );
 };
 
+interface ModelSelectorProps {
+  val: string;
+  onChange: (v: string) => void;
+  allModels: VMLModel[];
+  isSending: boolean;
+  onnxStatus: Record<string, { status: "idle" | "downloading" | "ready"; progress: number }>;
+  onDownloadOnnx: (model: VMLModel) => void;
+  downloadStates: Record<string, { status: string; progress: number; message: string }>;
+  onDownloadStarterModel: (repo_id: string, filename: string) => void;
+}
+
+const ModelSelector: React.FC<ModelSelectorProps> = ({
+  val,
+  onChange,
+  allModels,
+  isSending,
+  onnxStatus,
+  onDownloadOnnx,
+  downloadStates,
+  onDownloadStarterModel,
+}) => {
+  const selectedObj = allModels.find((m) => m.name === val);
+  const isOnnx = selectedObj?.source === "onnx";
+  const status =
+    isOnnx && selectedObj?.onnx_slug
+      ? onnxStatus[selectedObj.onnx_slug]
+      : null;
+
+  return (
+    <div className="flex items-center gap-2">
+      <div className="relative group">
+        <select
+          value={val}
+          onChange={(e) => onChange(e.target.value)}
+          className="appearance-none bg-[#1D152A] border border-purple-500/30 text-[#E2D8F0] text-xs py-2 pl-3 pr-8 rounded-xl focus:outline-none focus:ring-1 focus:ring-purple-500 transition-all cursor-pointer hover:bg-[#251B36] max-w-[180px] truncate"
+          disabled={allModels.length === 0 || isSending}
+        >
+          {allModels.length > 0 ? (
+            allModels.map((m) => (
+              <option key={`${m.source}-${m.name}`} value={m.name}>
+                {m.name.toUpperCase()}{" "}
+                {m.details?.parameter_size
+                  ? `• ${m.details.parameter_size}`
+                  : ""}
+              </option>
+            ))
+          ) : (
+            <option>No Models Available</option>
+          )}
+        </select>
+        <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-purple-400">
+          <ChevronDown size={14} />
+        </div>
+      </div>
+
+      {/* Quick Download Buttons for Starter Models not yet downloaded locally */}
+      {HUB_RECOMMENDED_MODELS.filter(
+        (rec) =>
+          !allModels.some(
+            (m) =>
+              m.name.toLowerCase() === rec.filename.toLowerCase() ||
+              m.name.toLowerCase().includes(rec.filename.toLowerCase().replace(".gguf", ""))
+          )
+      ).map((rec) => {
+        const dState = downloadStates[rec.filename];
+        const isDownloading = dState?.status === "downloading";
+        return (
+          <button
+            key={rec.filename}
+            onClick={() => onDownloadStarterModel(rec.repo_id, rec.filename)}
+            disabled={isDownloading}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer disabled:opacity-50 ${
+              rec.architecture.includes("Bonsai")
+                ? "bg-cyan-600/20 border-cyan-500/30 text-cyan-300 hover:bg-cyan-600/30 shadow-sm"
+                : "bg-purple-600/20 border-purple-500/30 text-purple-300 hover:bg-purple-600/30 shadow-sm"
+            }`}
+            title={`Download & Test ${rec.display_name}`}
+          >
+            {isDownloading ? (
+              <>
+                <Loader2 size={12} className="animate-spin" />
+                <span>Downloading ({dState?.progress || 0}%)...</span>
+              </>
+            ) : (
+              <>
+                <Download size={12} />
+                <span>Get {rec.display_name.split(" ")[0]} {rec.parameters} (~{rec.size_mb} MB)</span>
+              </>
+            )}
+          </button>
+        );
+      })}
+
+      {isOnnx && selectedObj && (
+        <div className="flex items-center gap-2">
+          {!status || status.status === "idle" ? (
+            <button
+              onClick={() => onDownloadOnnx(selectedObj)}
+              className="p-2 bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 rounded-xl hover:bg-indigo-500/20 transition-all shadow-lg shadow-indigo-500/5 group"
+              title="Download for Edge Chat"
+            >
+              <CloudDownload
+                size={16}
+                className="group-hover:scale-110 transition-transform"
+              />
+            </button>
+          ) : status.status === "downloading" ? (
+            <div className="flex items-center gap-3 bg-[#1D152A] border border-indigo-500/30 px-3 py-1.5 rounded-xl min-w-[120px]">
+              <div className="flex-1 h-1 bg-indigo-500/10 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-indigo-500 transition-all duration-300"
+                  style={{ width: `${status.progress}%` }}
+                />
+              </div>
+              <span className="text-[10px] font-bold text-indigo-400 font-mono">
+                {status.progress}%
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400">
+              <Cpu size={14} />
+              <span className="text-[10px] font-bold uppercase tracking-widest">
+                Edge Ready
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const ChatView: React.FC<ChatViewProps> = ({
   selectedModel,
   onModelChange,
@@ -396,6 +528,22 @@ export const ChatView: React.FC<ChatViewProps> = ({
     [filename: string]: { status: string; progress: number; message: string };
   }>({});
 
+  const fetchNativeModels = async () => {
+    try {
+      const res = await fetch("http://127.0.0.1:2000/list_native_models");
+      const data = await res.json();
+      const newModels = data.models || [];
+      setNativeModels((prev) => {
+        if (JSON.stringify(prev) === JSON.stringify(newModels)) {
+          return prev;
+        }
+        return newModels;
+      });
+    } catch (e) {
+      console.warn("Native models offline");
+    }
+  };
+
   const checkStarterStatus = async () => {
     try {
       for (const rec of HUB_RECOMMENDED_MODELS) {
@@ -404,25 +552,53 @@ export const ChatView: React.FC<ChatViewProps> = ({
         );
         if (res.ok) {
           const data = await res.json();
-          setDownloadStates((prev) => ({
-            ...prev,
-            [rec.filename]: {
-              status: data.status,
-              progress: data.progress || (data.is_present ? 100 : 0),
-              message: data.message || "",
-            },
-          }));
+          setDownloadStates((prev) => {
+            const current = prev[rec.filename];
+            const newProgress = data.progress || (data.is_present ? 100 : 0);
+            const newStatus = data.status || (data.is_present ? "ready" : "idle");
+            if (
+              current &&
+              current.status === newStatus &&
+              current.progress === newProgress &&
+              current.message === (data.message || "")
+            ) {
+              return prev;
+            }
+            return {
+              ...prev,
+              [rec.filename]: {
+                status: newStatus,
+                progress: newProgress,
+                message: data.message || "",
+              },
+            };
+          });
         }
       }
-      fetchNativeModels();
     } catch (e) {}
   };
 
+  // Initial check on mount
   useEffect(() => {
     checkStarterStatus();
-    const interval = setInterval(checkStarterStatus, 2500);
-    return () => clearInterval(interval);
+    fetchNativeModels();
   }, []);
+
+  // Poll only when there is an active download
+  useEffect(() => {
+    const hasActiveDownloads = Object.values(downloadStates).some(
+      (s) => s?.status === "downloading"
+    );
+    if (!hasActiveDownloads) return;
+
+    const interval = setInterval(() => {
+      checkStarterStatus();
+      fetchNativeModels();
+    }, 1500);
+
+    return () => clearInterval(interval);
+  }, [downloadStates]);
+
 
   const handleDownloadStarterModel = async (repo_id: string, filename: string) => {
     setDownloadStates((prev) => ({
@@ -526,19 +702,7 @@ ${assistantMsg.content}`;
   const abortA = useRef<AbortController | null>(null);
   const abortB = useRef<AbortController | null>(null);
 
-  useEffect(() => {
-    fetchNativeModels();
-  }, []);
 
-  const fetchNativeModels = async () => {
-    try {
-      const res = await fetch("http://127.0.0.1:2000/list_native_models");
-      const data = await res.json();
-      setNativeModels(data.models || []);
-    } catch (e) {
-      console.warn("Native models offline");
-    }
-  };
 
   useEffect(() => {
     if (allModels.length > 0) {
@@ -855,124 +1019,6 @@ ${assistantMsg.content}`;
     }
   };
 
-  const ModelSelector = ({
-    val,
-    onChange,
-  }: {
-    val: string;
-    onChange: (v: string) => void;
-  }) => {
-    const selectedObj = allModels.find((m) => m.name === val);
-    const isOnnx = selectedObj?.source === "onnx";
-    const status =
-      isOnnx && selectedObj?.onnx_slug
-        ? onnxStatus[selectedObj.onnx_slug]
-        : null;
-
-    return (
-      <div className="flex items-center gap-2">
-        <div className="relative group">
-          <select
-            value={val}
-            onChange={(e) => onChange(e.target.value)}
-            className="appearance-none bg-[#1D152A] border border-purple-500/30 text-[#E2D8F0] text-xs py-2 pl-3 pr-8 rounded-xl focus:outline-none focus:ring-1 focus:ring-purple-500 transition-all cursor-pointer hover:bg-[#251B36] max-w-[180px] truncate"
-            disabled={allModels.length === 0 || isSending}
-          >
-            {allModels.length > 0 ? (
-              allModels.map((m) => (
-                <option key={`${m.source}-${m.name}`} value={m.name}>
-                  {m.name.toUpperCase()}{" "}
-                  {m.details?.parameter_size
-                    ? `• ${m.details.parameter_size}`
-                    : ""}
-                </option>
-              ))
-            ) : (
-              <option>No Models Available</option>
-            )}
-          </select>
-          <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-purple-400">
-            <ChevronDown size={14} />
-          </div>
-        </div>
-
-        {/* Quick Download Buttons for Starter Models not yet downloaded locally */}
-        {HUB_RECOMMENDED_MODELS.filter(
-          (rec) =>
-            !allModels.some(
-              (m) =>
-                m.name.toLowerCase() === rec.filename.toLowerCase() ||
-                m.name.toLowerCase().includes(rec.filename.toLowerCase().replace(".gguf", ""))
-            )
-        ).map((rec) => {
-          const dState = downloadStates[rec.filename];
-          const isDownloading = dState?.status === "downloading";
-          return (
-            <button
-              key={rec.filename}
-              onClick={() => handleDownloadStarterModel(rec.repo_id, rec.filename)}
-              disabled={isDownloading}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer disabled:opacity-50 ${
-                rec.architecture.includes("Bonsai")
-                  ? "bg-cyan-600/20 border-cyan-500/30 text-cyan-300 hover:bg-cyan-600/30 shadow-sm"
-                  : "bg-purple-600/20 border-purple-500/30 text-purple-300 hover:bg-purple-600/30 shadow-sm"
-              }`}
-              title={`Download & Test ${rec.display_name}`}
-            >
-              {isDownloading ? (
-                <>
-                  <Loader2 size={12} className="animate-spin" />
-                  <span>Downloading ({dState?.progress || 0}%)...</span>
-                </>
-              ) : (
-                <>
-                  <Download size={12} />
-                  <span>Get {rec.display_name.split(" ")[0]} {rec.parameters} (~{rec.size_mb} MB)</span>
-                </>
-              )}
-            </button>
-          );
-        })}
-
-        {isOnnx && selectedObj && (
-          <div className="flex items-center gap-2">
-            {!status || status.status === "idle" ? (
-              <button
-                onClick={() => handleDownloadOnnx(selectedObj)}
-                className="p-2 bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 rounded-xl hover:bg-indigo-500/20 transition-all shadow-lg shadow-indigo-500/5 group"
-                title="Download for Edge Chat"
-              >
-                <CloudDownload
-                  size={16}
-                  className="group-hover:scale-110 transition-transform"
-                />
-              </button>
-            ) : status.status === "downloading" ? (
-              <div className="flex items-center gap-3 bg-[#1D152A] border border-indigo-500/30 px-3 py-1.5 rounded-xl min-w-[120px]">
-                <div className="flex-1 h-1 bg-indigo-500/10 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-indigo-500 transition-all duration-300"
-                    style={{ width: `${status.progress}%` }}
-                  />
-                </div>
-                <span className="text-[10px] font-bold text-indigo-400 font-mono">
-                  {status.progress}%
-                </span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400">
-                <Cpu size={14} />
-                <span className="text-[10px] font-bold uppercase tracking-widest">
-                  Edge Ready
-                </span>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  };
-
   return (
     <div className="flex flex-col h-full w-full bg-[#0B090F] relative overflow-hidden">
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-purple-900/10 blur-[120px] rounded-full pointer-events-none" />
@@ -999,7 +1045,16 @@ ${assistantMsg.content}`;
 
         {/* Central Controls */}
         <div className="flex items-center gap-2">
-          <ModelSelector val={selectedModel} onChange={onModelChange} />
+          <ModelSelector
+            val={selectedModel}
+            onChange={onModelChange}
+            allModels={allModels}
+            isSending={isSending}
+            onnxStatus={onnxStatus}
+            onDownloadOnnx={handleDownloadOnnx}
+            downloadStates={downloadStates}
+            onDownloadStarterModel={handleDownloadStarterModel}
+          />
 
           <Button
             variant="ghost"
@@ -1012,7 +1067,16 @@ ${assistantMsg.content}`;
           </Button>
 
           {isSplitMode && (
-            <ModelSelector val={selectedModel2} onChange={setSelectedModel2} />
+            <ModelSelector
+              val={selectedModel2}
+              onChange={setSelectedModel2}
+              allModels={allModels}
+              isSending={isSending}
+              onnxStatus={onnxStatus}
+              onDownloadOnnx={handleDownloadOnnx}
+              downloadStates={downloadStates}
+              onDownloadStarterModel={handleDownloadStarterModel}
+            />
           )}
         </div>
 
