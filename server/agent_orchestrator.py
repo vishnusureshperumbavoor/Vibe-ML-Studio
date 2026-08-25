@@ -218,9 +218,10 @@ async def execute_tool(
         rank = arguments.get("rank", 16)
         persona = arguments.get("persona", "").strip()
         
-        model_name_part = base_model.split('/')[-1].lower().replace('.', '-')
-        dataset_name_part = dataset_id.split('/')[-1].lower().replace('.', '-')
-        base_slug = f"{model_name_part}-{dataset_name_part}-instruct"
+        model_name_part = base_model.split('/')[-1].lower().replace('.', '-').replace('_', '-')
+        dataset_name_part = dataset_id.split('/')[-1].lower().replace('.', '-').replace('_', '-')
+        # Prioritize domain/dataset identity (e.g. medquad-instruct, vsp-alpaca-instruct)
+        base_slug = f"{dataset_name_part}-instruct"
         
         # Architecture detection for GGUF
         gguf_arch = "llama"
@@ -238,9 +239,13 @@ async def execute_tool(
         
         # Auto-increment version so every training run gets its own card in the gallery
         version = 1
-        while os.path.exists(os.path.join(adapters_dir, f"{base_slug}-vml{version}")):
+        while (
+            os.path.exists(os.path.join(adapters_dir, f"{base_slug}-v{version}")) or
+            os.path.exists(os.path.join(adapters_dir, f"{base_slug}-vml{version}")) or
+            os.path.exists(os.path.join(adapters_dir, f"{model_name_part}-{base_slug}-vml{version}"))
+        ):
             version += 1
-        model_slug = f"{base_slug}-vml{version}"
+        model_slug = f"{base_slug}-v{version}"
         output_dir = os.path.join(adapters_dir, model_slug)
         
         # Split into logical blocks for the notebook

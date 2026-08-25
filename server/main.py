@@ -17,6 +17,8 @@ from typing import List, Optional
 from distillation_service import distiller
 from dataset_uploader import upload_dataset_to_hf
 from benchmark_runner import runner as bench_runner
+from hf_uploader import upload_to_hf, create_space_for_model, _load_hf_token
+from huggingface_hub import HfApi
 
 # Load HF_TOKEN from server/.env or project root
 load_dotenv() # Check server/
@@ -652,22 +654,61 @@ async def list_native_models():
                     
                     # Infer dataset from slug (e.g. qwen2-0-5b-medquad-instruct-vml1 -> MedQuAD)
                     dataset_name = "Custom Domain"
-                    if "medquad" in slug.lower(): dataset_name = "lavita/MedQuAD"
-                    elif "alpaca" in slug.lower(): dataset_name = "Alpaca Cleaned"
+                    if "medquad" in slug.lower():
+                        dataset_name = "lavita/MedQuAD"
+                    elif "vsp_alpaca" in slug.lower() or "vsp-alpaca" in slug.lower():
+                        dataset_name = "vishnusureshperumbavoor/vsp_alpaca"
+                    elif "alpaca" in slug.lower():
+                        dataset_name = "Alpaca Cleaned"
                     
+                    # Clean display name by stripping redundant base model prefixes
+                    clean_name = slug
+                    prefixes_to_strip = [
+                        "qwen2-0-5b-", "qwen2-0_5b-", "qwen2-1-5b-", "qwen2-7b-", "qwen2-", "qwen-",
+                        "bonsai-1-7b-", "bonsai-", "smollm-135m-", "smollm-", "phi-3-mini-", "phi-3-", "llama-3-"
+                    ]
+                    for p in prefixes_to_strip:
+                        if clean_name.lower().startswith(p):
+                            clean_name = clean_name[len(p):]
+                            break
+                    
+                    # Format vml1/vml2 -> v1/v2
+                    clean_name = re.sub(r'[-_]vml(\d+)', r' v\1', clean_name, flags=re.IGNORECASE)
+                    clean_name = re.sub(r'[-_]v(\d+)', r' v\1', clean_name, flags=re.IGNORECASE)
+                    clean_name = clean_name.replace('-', ' ').replace('_', ' ').title()
+                    clean_name = clean_name.replace("Medquad", "MedQuAD").replace("Alpaca", "Alpaca").replace("Vsp", "VSP")
+
+                    # Clean base model display
+                    clean_base = base_model.replace('_', '/').split('/')[-1]
+
+                    # Check for persisted HF metadata in vml_meta.json
+                    hf_url = None
+                    repo_id = None
+                    meta_path = os.path.join(lora_dir, "vml_meta.json")
+                    if os.path.exists(meta_path):
+                        try:
+                            with open(meta_path, "r", encoding="utf-8") as mf:
+                                meta_json = json.load(mf)
+                                hf_url = meta_json.get("hf_url")
+                                repo_id = meta_json.get("repo_id")
+                        except Exception:
+                            pass
+
                     results.append({
                         "name": f"Fine-tuned: {slug}",
-                        "display_name": slug.replace('-', ' ').title(),
+                        "display_name": clean_name,
                         "source": "native",
                         "type": "adapter",
                         "lora_slug": slug,
-                        "base_model": base_model,
+                        "base_model": clean_base,
                         "lora_rank": rank,
                         "dataset_id": dataset_name,
                         "size_mb": size_mb,
                         "created_at": mtime,
                         "architecture": "LoRA Adapter",
-                        "description": f"Domain-adapted LoRA model trained on {dataset_name}."
+                        "description": f"Domain-adapted LoRA model trained on {dataset_name}.",
+                        "hf_url": hf_url,
+                        "repo_id": repo_id
                     })
 
     # 3. ONNX Models in server/models/onnx_export
@@ -982,6 +1023,110 @@ async def reset_distill():
     """Resets the distiller status to idle."""
     distiller.status = {"step": "idle", "progress": 0, "current_task": ""}
     return {"status": "reset"}
+
+# --- Hugging Face Model Upload & Hub Endpoints ---
+
+class UploadModelToHfRequest(BaseModel):
+    lora_slug: str
+    repo_name: Optional[str] = None
+    is_private: Optional[bool] = False
+    create_space: Optional[bool] = False
+
+@app.get("/hf/auth_status")
+async def get_hf_auth_status():
+    """
+    Checks if Hugging Face authentication (HF_TOKEN) is valid and returns user info.
+    """
+    token = _load_hf_token()
+    if not token:
+        return {"authenticated": False, "error": "HF_TOKEN not found in .env"}
+    
+    try:
+        api = HfApi(token=token)
+        user_info = api.whoami()
+        username = user_info.get("name") or user_info.get("username") or "user"
+        avatar_url = user_info.get("avatarUrl")
+        return {
+            "authenticated": True,
+            "username": username,
+            "fullname": user_info.get("fullname"),
+            "avatar_url": avatar_url
+        }
+    except Exception as e:
+        return {"authenticated": False, "error": f"HF Auth failed: {str(e)}"}
+
+@app.post("/models/upload_to_hf")
+async def upload_model_to_hf_endpoint(req: UploadModelToHfRequest):
+    """
+    Pushes a local fine-tuned LoRA model to Hugging Face Hub with automated Model Card & optional Space.
+    """
+    adapter_path = os.path.join(ADAPTERS_DIR, req.lora_slug)
+    if not os.path.exists(adapter_path):
+        raise HTTPException(status_code=404, detail=f"LoRA adapter '{req.lora_slug}' not found locally.")
+
+    # Read base model & dataset from adapter config if present
+    base_model = "Qwen/Qwen2-0.5B"
+    dataset_id = "Custom Dataset"
+    cfg_path = os.path.join(adapter_path, "adapter_config.json")
+    if os.path.exists(cfg_path):
+        try:
+            with open(cfg_path, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+                base_model = cfg.get("base_model_name_or_path", base_model)
+        except Exception:
+            pass
+
+    if "medquad" in req.lora_slug.lower():
+        dataset_id = "lavita/MedQuAD"
+    elif "alpaca" in req.lora_slug.lower():
+        dataset_id = "yahma/alpaca-cleaned"
+
+    repo_slug = req.repo_name.strip() if req.repo_name and req.repo_name.strip() else req.lora_slug
+    
+    result = upload_to_hf(
+        path=adapter_path,
+        repo_slug=repo_slug,
+        base_model=base_model,
+        dataset_id=dataset_id,
+        is_private=bool(req.is_private)
+    )
+
+    if not result.get("success"):
+        raise HTTPException(status_code=500, detail=result.get("error", "Failed to upload model to Hugging Face."))
+
+    space_url = None
+    if req.create_space:
+        try:
+            space_res = create_space_for_model(repo_slug, base_model, result["repo_id"])
+            if space_res.get("success"):
+                space_url = space_res.get("space_url")
+        except Exception as e:
+            print(f"Space creation warning: {e}")
+
+    # Persist metadata inside the adapter directory
+    meta_path = os.path.join(adapter_path, "vml_meta.json")
+    try:
+        meta_data = {}
+        if os.path.exists(meta_path):
+            with open(meta_path, "r", encoding="utf-8") as mf:
+                meta_data = json.load(mf)
+        meta_data["hf_url"] = result["url"]
+        meta_data["repo_id"] = result["repo_id"]
+        meta_data["last_uploaded_at"] = time.time()
+        if space_url:
+            meta_data["space_url"] = space_url
+        with open(meta_path, "w", encoding="utf-8") as mf:
+            json.dump(meta_data, mf, indent=2)
+    except Exception as e:
+        print(f"Failed to persist local vml_meta.json: {e}")
+
+    return {
+        "success": True,
+        "repo_id": result["repo_id"],
+        "url": result["url"],
+        "space_url": space_url,
+        "message": f"Successfully published model to {result['url']}"
+    }
 
 @app.get("/list_local_base_models")
 async def list_local_base_models():

@@ -49,32 +49,47 @@ Built with [VML Studio](https://github.com/vishnusureshperumbavoor/VML-Studio) -
         # For single files, we return the content so the caller can handle it
         return content
 
-def upload_to_hf(path: str, repo_slug: str, base_model: str = "Unknown", dataset_id: str = "Unknown"):
+def _load_hf_token():
+    if os.path.exists(".env"):
+        load_dotenv(".env")
+    elif os.path.exists("../.env"):
+        load_dotenv("../.env")
+    elif os.path.exists(os.path.join(os.path.dirname(__file__), ".env")):
+        load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+    elif os.path.exists(os.path.join(os.path.dirname(__file__), "..", ".env")):
+        load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
+    else:
+        load_dotenv()
+    return os.getenv("HF_TOKEN")
+
+def upload_to_hf(path: str, repo_slug: str, base_model: str = "Unknown", dataset_id: str = "Unknown", is_private: bool = False):
     """
     Uploads a file or a folder to Hugging Face and generates a Model Card.
     """
-    load_dotenv()
-    token = os.getenv("HF_TOKEN")
+    token = _load_hf_token()
     if not token:
         print("Error: HF_TOKEN not found. Deployment aborted.")
-        return False
+        return {"success": False, "error": "HF_TOKEN not found in .env. Please set HF_TOKEN in your environment or .env file."}
 
     api = HfApi(token=token)
     
     try:
         user_info = api.whoami()
-        username = user_info['name']
+        username = user_info.get('name') or user_info.get('username') or "user"
     except Exception as e:
         print(f"Authentication failed: {e}")
-        return False
+        return {"success": False, "error": f"Hugging Face authentication failed: {str(e)}"}
 
-    repo_id = f"{username}/{repo_slug.lower().replace('/', '_')}-vml"
+    clean_slug = repo_slug.lower().replace('/', '_').replace(' ', '-')
+    repo_id = f"{username}/{clean_slug}"
+    if not repo_id.endswith("-vml") and not "-vml" in repo_id:
+        repo_id = f"{repo_id}-vml"
     
     print(f"Preparing repository: {repo_id}...")
     try:
-        create_repo(repo_id=repo_id, token=token, private=False, exist_ok=True, repo_type="model")
+        create_repo(repo_id=repo_id, token=token, private=is_private, exist_ok=True, repo_type="model")
     except Exception as e:
-        print(f"Repo access issue: {e}")
+        print(f"Repo access/creation note: {e}")
 
     # Generate README
     print("Generating Model Card (README.md)...")
@@ -82,12 +97,12 @@ def upload_to_hf(path: str, repo_slug: str, base_model: str = "Unknown", dataset
 
     try:
         if os.path.isdir(path):
-            print(f"Uploading folder and README to HF...")
+            print(f"Uploading folder and README to HF ({repo_id})...")
             api.upload_folder(
                 folder_path=path,
                 repo_id=repo_id,
                 repo_type="model",
-                commit_message=f"VML Build: {repo_slug}"
+                commit_message=f"VML Fine-Tuned Model: {repo_slug}"
             )
         else:
             print(f"Uploading model file and auto-generated README...")
@@ -100,42 +115,44 @@ def upload_to_hf(path: str, repo_slug: str, base_model: str = "Unknown", dataset
             )
             # Upload the README as a separate action for single-file uploads
             temp_readme = "TEMP_README.md"
-            with open(temp_readme, "w") as f: f.write(readme_content)
+            with open(temp_readme, "w", encoding="utf-8") as f:
+                f.write(readme_content)
             api.upload_file(
                 path_or_fileobj=temp_readme,
                 path_in_repo="README.md",
                 repo_id=repo_id,
                 repo_type="model"
             )
-            os.remove(temp_readme)
+            if os.path.exists(temp_readme):
+                os.remove(temp_readme)
             
         final_url = f"https://huggingface.co/{repo_id}"
         print(f"DEPLOYMENT SUCCESSFUL!")
         print(f"[VML_DEPLOYMENT_URL] {final_url}")
-        return True
+        return {"success": True, "repo_id": repo_id, "url": final_url, "username": username}
     except Exception as e:
         print(f"Upload failed: {e}")
-        return False
+        return {"success": False, "error": f"Upload failed: {str(e)}"}
 
 def create_space_for_model(repo_slug: str, base_model: str, adapter_repo_id: str):
     """
     Creates a Gradio Space on Hugging Face for the uploaded model.
     """
-    load_dotenv()
-    token = os.getenv("HF_TOKEN")
+    token = _load_hf_token()
     if not token:
         print("Error: HF_TOKEN not found. Space creation aborted.")
-        return False
+        return {"success": False, "error": "HF_TOKEN not found."}
 
     api = HfApi(token=token)
     try:
         user_info = api.whoami()
-        username = user_info['name']
+        username = user_info.get('name') or user_info.get('username') or "user"
     except Exception as e:
         print(f"Authentication failed: {e}")
-        return False
+        return {"success": False, "error": f"Auth failed: {str(e)}"}
 
-    space_repo_id = f"{username}/{repo_slug.lower().replace('/', '_')}-assistant"
+    clean_slug = repo_slug.lower().replace('/', '_').replace(' ', '-')
+    space_repo_id = f"{username}/{clean_slug}-assistant"
     
     print(f"Creating Hugging Face Space: {space_repo_id}...")
     try:
@@ -196,10 +213,10 @@ if __name__ == "__main__":
         space_url = f"https://huggingface.co/spaces/{space_repo_id}"
         print(f"SPACE DEPLOYED SUCCESSFULLY!")
         print(f"[VML_SPACE_URL] {space_url}")
-        return True
+        return {"success": True, "space_url": space_url}
     except Exception as e:
         print(f"Space creation failed: {e}")
-        return False
+        return {"success": False, "error": f"Space creation failed: {str(e)}"}
 
 if __name__ == "__main__":
     # Args: path, repo_slug, base_model, dataset_id
@@ -212,3 +229,4 @@ if __name__ == "__main__":
         print("Usage: python hf_uploader.py <path> <repo_slug> [base_model] [dataset_id]")
     else:
         upload_to_hf(path, slug, base, ds)
+

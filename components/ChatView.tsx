@@ -168,7 +168,7 @@ const renderMessageList = (
                         {isReady ? (
                           <button
                             onClick={() => onSelectModel && onSelectModel(m.filename)}
-                            className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-all shadow-lg shadow-emerald-900/20 flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                            className="w-full h-10 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-all shadow-lg shadow-emerald-900/20 flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                           >
                             <CheckCircle2 size={14} />
                             <span>Select & Chat</span>
@@ -177,7 +177,7 @@ const renderMessageList = (
                           <button
                             onClick={() => onDownloadModel && onDownloadModel(m.repo_id, m.filename)}
                             disabled={isDownloading}
-                            className={`w-full py-2.5 px-4 rounded-xl text-white font-bold text-xs transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50 disabled:scale-100 ${
+                            className={`w-full h-10 px-4 rounded-xl text-white font-bold text-xs transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50 disabled:scale-100 ${
                               m.architecture.includes("Bonsai")
                                 ? "bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 shadow-cyan-900/20"
                                 : "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 shadow-purple-900/20"
@@ -417,7 +417,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
         <select
           value={val}
           onChange={(e) => onChange(e.target.value)}
-          className="appearance-none bg-[#1D152A] border border-purple-500/30 text-[#E2D8F0] text-xs py-2 pl-3 pr-8 rounded-xl focus:outline-none focus:ring-1 focus:ring-purple-500 transition-all cursor-pointer hover:bg-[#251B36] max-w-[180px] truncate"
+          className="appearance-none bg-[#1D152A] border border-purple-500/30 text-[#E2D8F0] text-xs h-9 pl-3 pr-8 rounded-xl focus:outline-none focus:ring-1 focus:ring-purple-500 transition-all cursor-pointer hover:bg-[#251B36] max-w-[180px] truncate flex items-center"
           disabled={allModels.length === 0 || isSending}
         >
           {allModels.length > 0 ? (
@@ -454,10 +454,10 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
             key={rec.filename}
             onClick={() => onDownloadStarterModel(rec.repo_id, rec.filename)}
             disabled={isDownloading}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer disabled:opacity-50 ${
+            className={`h-9 flex items-center gap-1.5 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer disabled:opacity-50 whitespace-nowrap shadow-sm hover:scale-105 active:scale-95 ${
               rec.architecture.includes("Bonsai")
-                ? "bg-cyan-600/20 border-cyan-500/30 text-cyan-300 hover:bg-cyan-600/30 shadow-sm"
-                : "bg-purple-600/20 border-purple-500/30 text-purple-300 hover:bg-purple-600/30 shadow-sm"
+                ? "bg-cyan-600/20 border-cyan-500/30 text-cyan-300 hover:bg-cyan-600/30"
+                : "bg-purple-600/20 border-purple-500/30 text-purple-300 hover:bg-purple-600/30"
             }`}
             title={`Download & Test ${rec.display_name}`}
           >

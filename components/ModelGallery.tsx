@@ -16,6 +16,11 @@ import {
   Loader2,
   ExternalLink,
   Cloud,
+  UploadCloud,
+  Globe,
+  Lock,
+  Check,
+  Copy,
 } from "lucide-react";
 import { ChatView } from "./ChatView";
 import { HUB_RECOMMENDED_MODELS } from "../constants";
@@ -68,11 +73,94 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  // Hugging Face Upload State
+  const [modelToUpload, setModelToUpload] = useState<GalleryModelItem | null>(null);
+  const [hfUsername, setHfUsername] = useState<string>("");
+  const [isHfAuthenticated, setIsHfAuthenticated] = useState<boolean | null>(null);
+  const [hfAuthError, setHfAuthError] = useState<string | null>(null);
+  const [customRepoName, setCustomRepoName] = useState<string>("");
+  const [isPrivateRepo, setIsPrivateRepo] = useState<boolean>(false);
+  const [createSpace, setCreateSpace] = useState<boolean>(true);
+  const [isUploadingHf, setIsUploadingHf] = useState<boolean>(false);
+  const [hfUploadError, setHfUploadError] = useState<string | null>(null);
+  const [copiedLink, setCopiedLink] = useState<boolean>(false);
+  const [hfUploadSuccess, setHfUploadSuccess] = useState<{
+    repo_id: string;
+    url: string;
+    space_url?: string;
+  } | null>(null);
+
   useEffect(() => {
     if (initialSelectedModel) {
       setActiveChatModel(initialSelectedModel);
     }
   }, [initialSelectedModel]);
+
+  const checkHfAuth = async () => {
+    try {
+      const res = await fetch("http://127.0.0.1:2000/hf/auth_status");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.authenticated) {
+          setIsHfAuthenticated(true);
+          setHfUsername(data.username || "user");
+          setHfAuthError(null);
+        } else {
+          setIsHfAuthenticated(false);
+          setHfAuthError(data.error || "HF_TOKEN not found in .env");
+        }
+      }
+    } catch (e: any) {
+      setIsHfAuthenticated(false);
+      setHfAuthError(e.message || "Failed to reach server");
+    }
+  };
+
+  const handleOpenUploadModal = (model: GalleryModelItem) => {
+    setModelToUpload(model);
+    setCustomRepoName(model.lora_slug || model.name.replace(/[^a-zA-Z0-9-_]/g, "-"));
+    setHfUploadError(null);
+    setHfUploadSuccess(null);
+    setIsUploadingHf(false);
+    checkHfAuth();
+  };
+
+  const handlePushToHf = async () => {
+    if (!modelToUpload || !modelToUpload.lora_slug) return;
+    setIsUploadingHf(true);
+    setHfUploadError(null);
+
+    try {
+      const res = await fetch("http://127.0.0.1:2000/models/upload_to_hf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lora_slug: modelToUpload.lora_slug,
+          repo_name: customRepoName.trim() || modelToUpload.lora_slug,
+          is_private: isPrivateRepo,
+          create_space: createSpace,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.detail || data.error || "Upload failed");
+      }
+
+      setHfUploadSuccess({
+        repo_id: data.repo_id,
+        url: data.url,
+        space_url: data.space_url,
+      });
+
+      // Refresh models list to populate new hf_url
+      await fetchModels();
+    } catch (e: any) {
+      setHfUploadError(e.message || "Failed to push model to Hugging Face.");
+    } finally {
+      setIsUploadingHf(false);
+    }
+  };
 
   const fetchModels = async () => {
     setIsLoading(true);
@@ -656,35 +744,51 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
                     )}
 
                     {/* Action Footer */}
-                    <div className="flex items-center justify-between pt-2">
+                    <div className="flex items-center justify-between pt-2 border-t border-white/5 h-10">
                       {isDownloaded ? (
                         <>
-                          <span className="text-[10px] text-emerald-400/80 flex items-center gap-1 font-mono">
-                            <CheckCircle2 size={12} className="text-emerald-400" />
+                          <span className="text-[10px] text-emerald-400/80 flex items-center gap-1.5 font-mono">
+                            <CheckCircle2 size={13} className="text-emerald-400" />
                             <span>Locally Available</span>
                           </span>
 
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveChatModel(model.name);
-                            }}
-                            className={`px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition-all shadow-lg cursor-pointer ${
-                              isLoRA
-                                ? "bg-amber-500 hover:bg-amber-400 text-black shadow-amber-900/30 group-hover:scale-105"
-                                : isBase
-                                ? "bg-purple-600 hover:bg-purple-500 text-white shadow-purple-900/30 group-hover:scale-105"
-                                : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-900/30 group-hover:scale-105"
-                            }`}
-                          >
-                            <MessageSquare size={13} />
-                            <span>Chat Now</span>
-                          </button>
+                          <div className="flex items-center gap-3">
+                            {isLoRA && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenUploadModal(model);
+                                }}
+                                className="text-xs font-semibold text-amber-400/80 hover:text-amber-300 hover:underline flex items-center gap-1 transition-all cursor-pointer"
+                                title="Push fine-tuned weights to Hugging Face Hub"
+                              >
+                                <UploadCloud size={13} />
+                                <span>{model.hf_url ? "Re-Push to HF" : "Push to HF"}</span>
+                              </button>
+                            )}
+
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveChatModel(model.name);
+                              }}
+                              className={`h-8 px-4 rounded-xl font-bold text-xs flex items-center gap-2 transition-all shadow-md cursor-pointer hover:scale-105 active:scale-95 ${
+                                isLoRA
+                                  ? "bg-amber-500 hover:bg-amber-400 text-black shadow-amber-900/20"
+                                  : isBase
+                                  ? "bg-purple-600 hover:bg-purple-500 text-white shadow-purple-900/20"
+                                  : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-900/20"
+                              }`}
+                            >
+                              <MessageSquare size={13} />
+                              <span>Chat Now</span>
+                            </button>
+                          </div>
                         </>
                       ) : (
                         <>
-                          <span className="text-[10px] text-cyan-400/70 flex items-center gap-1 font-mono">
-                            <Cloud size={12} className="text-cyan-400" />
+                          <span className="text-[10px] text-cyan-400/70 flex items-center gap-1.5 font-mono">
+                            <Cloud size={13} className="text-cyan-400" />
                             <span>Hugging Face Hub</span>
                           </span>
 
@@ -696,7 +800,7 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
                               }
                             }}
                             disabled={isDownloading}
-                            className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 disabled:from-cyan-900/50 disabled:to-indigo-900/50 text-white font-bold text-xs flex items-center gap-2 transition-all shadow-lg shadow-cyan-900/20 cursor-pointer group-hover:scale-105 active:scale-95 disabled:scale-100"
+                            className="h-8 px-4 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 disabled:from-cyan-900/50 disabled:to-indigo-900/50 text-white font-bold text-xs flex items-center gap-2 transition-all shadow-md shadow-cyan-900/20 cursor-pointer hover:scale-105 active:scale-95 disabled:scale-100"
                           >
                             {isDownloading ? (
                               <>
@@ -721,6 +825,266 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
         )}
       </div>
 
+      {/* Push to Hugging Face Modal */}
+      {modelToUpload && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="w-full max-w-lg bg-[#140F1D] border border-amber-500/30 rounded-3xl p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-amber-400 shadow-inner">
+                  <UploadCloud size={24} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <span>Push to Hugging Face Hub</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20 uppercase font-mono">
+                      LoRA Model
+                    </span>
+                  </h3>
+                  <p className="text-xs text-white/40">
+                    Publish your fine-tuned weights and automated Model Card.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Hugging Face Auth Banner */}
+            <div className="p-3.5 rounded-2xl bg-[#0B090F] border border-white/10 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2.5">
+                {isHfAuthenticated === null ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin text-amber-400" />
+                    <span className="text-white/60">Verifying HF_TOKEN from .env...</span>
+                  </>
+                ) : isHfAuthenticated ? (
+                  <>
+                    <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="text-emerald-300 font-medium">
+                      Authenticated as <strong className="text-white">@{hfUsername}</strong>
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <AlertTriangle size={14} className="text-amber-400 shrink-0" />
+                    <span className="text-amber-300">
+                      {hfAuthError || "HF_TOKEN not found in .env"}
+                    </span>
+                  </>
+                )}
+              </div>
+              {isHfAuthenticated && (
+                <span className="text-[10px] font-mono text-emerald-400/80 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                  Ready to Deploy
+                </span>
+              )}
+            </div>
+
+            {/* Success View */}
+            {hfUploadSuccess ? (
+              <div className="space-y-4 py-2 animate-in fade-in duration-300">
+                <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 space-y-3">
+                  <div className="flex items-center gap-2 font-bold text-sm text-emerald-400">
+                    <CheckCircle2 size={18} />
+                    <span>Model Successfully Published to Hub!</span>
+                  </div>
+                  <p className="text-xs text-white/70">
+                    Your model adapter weights, config, and Model Card README are now live on Hugging Face.
+                  </p>
+
+                  <div className="space-y-2 pt-2">
+                    <div className="p-3 rounded-xl bg-black/40 border border-white/5 flex items-center justify-between gap-2">
+                      <div className="truncate font-mono text-xs text-white/90">
+                        {hfUploadSuccess.url}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(hfUploadSuccess.url);
+                            setCopiedLink(true);
+                            setTimeout(() => setCopiedLink(false), 2000);
+                          }}
+                          className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition-all text-xs"
+                          title="Copy Link"
+                        >
+                          {copiedLink ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+                        </button>
+                        <a
+                          href={hfUploadSuccess.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 text-xs font-bold transition-all"
+                        >
+                          <span>Open Repo</span>
+                          <ExternalLink size={11} />
+                        </a>
+                      </div>
+                    </div>
+
+                    {hfUploadSuccess.space_url && (
+                      <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-between gap-2">
+                        <div className="truncate font-mono text-xs text-purple-200">
+                          Interactive Space: {hfUploadSuccess.space_url}
+                        </div>
+                        <a
+                          href={hfUploadSuccess.space_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-500/20 text-purple-300 hover:bg-purple-500/30 text-xs font-bold transition-all shrink-0"
+                        >
+                          <span>Open Space</span>
+                          <ExternalLink size={11} />
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    onClick={() => {
+                      setModelToUpload(null);
+                      setHfUploadSuccess(null);
+                    }}
+                    className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs transition-all shadow-lg cursor-pointer"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* Config & Upload Form */
+              <div className="space-y-4">
+                {/* Repo Slug Name */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-white/80 flex items-center justify-between">
+                    <span>Repository Name</span>
+                    <span className="text-[10px] text-white/40 font-mono">
+                      Target: {hfUsername || "username"}/{customRepoName.toLowerCase().replace(/[^a-z0-9-_]/g, "-")}-vml
+                    </span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={customRepoName}
+                      onChange={(e) => setCustomRepoName(e.target.value)}
+                      placeholder="e.g. qwen2-medquad-lora"
+                      disabled={isUploadingHf}
+                      className="w-full px-4 py-2.5 rounded-xl bg-[#0B090F] border border-white/10 text-white font-mono text-xs focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/30 transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Model Specs Preview */}
+                <div className="p-3.5 rounded-2xl bg-[#0B090F] border border-white/5 space-y-2">
+                  <div className="text-[11px] font-bold text-white/70">Model Card Specs</div>
+                  <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
+                    <div className="p-2 rounded-lg bg-white/5 text-white/60">
+                      Base Model: <span className="text-white font-semibold">{modelToUpload.base_model || "Qwen/Qwen2-0.5B"}</span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-white/5 text-white/60">
+                      Dataset: <span className="text-emerald-400 font-semibold">{modelToUpload.dataset_id || "Custom"}</span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-white/5 text-white/60">
+                      LoRA Rank: <span className="text-amber-400 font-semibold">{modelToUpload.lora_rank || 16}</span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-white/5 text-white/60">
+                      Files: <span className="text-cyan-300 font-semibold">adapter, config, gguf, README</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Options: Privacy & Space */}
+                <div className="space-y-3 pt-1">
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-[#0B090F] border border-white/5">
+                    <div className="flex items-center gap-2.5">
+                      {isPrivateRepo ? <Lock size={15} className="text-amber-400" /> : <Globe size={15} className="text-cyan-400" />}
+                      <div>
+                        <div className="text-xs font-bold text-white">
+                          {isPrivateRepo ? "Private Repository" : "Public Repository"}
+                        </div>
+                        <div className="text-[10px] text-white/40">
+                          {isPrivateRepo ? "Only you can view and download weights" : "Visible on the Hugging Face public Hub"}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsPrivateRepo(!isPrivateRepo)}
+                      disabled={isUploadingHf}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                        isPrivateRepo
+                          ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                          : "bg-white/5 text-white/70 border-white/10 hover:bg-white/10"
+                      }`}
+                    >
+                      {isPrivateRepo ? "Private" : "Public"}
+                    </button>
+                  </div>
+
+                  <label className="flex items-center gap-3 p-3 rounded-xl bg-[#0B090F] border border-white/5 cursor-pointer hover:bg-white/5 transition-all">
+                    <input
+                      type="checkbox"
+                      checked={createSpace}
+                      onChange={(e) => setCreateSpace(e.target.checked)}
+                      disabled={isUploadingHf}
+                      className="w-4 h-4 rounded border-white/20 bg-black/40 text-amber-500 focus:ring-amber-500/30"
+                    />
+                    <div>
+                      <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <Sparkles size={12} className="text-purple-400" />
+                        <span>Auto-Deploy Gradio Space Demo</span>
+                      </div>
+                      <div className="text-[10px] text-white/40">
+                        Launches a live interactive web UI demo on Hugging Face Spaces.
+                      </div>
+                    </div>
+                  </label>
+                </div>
+
+                {/* Error Banner */}
+                {hfUploadError && (
+                  <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
+                    <AlertTriangle size={15} className="shrink-0" />
+                    <span>{hfUploadError}</span>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/10">
+                  <button
+                    onClick={() => {
+                      setModelToUpload(null);
+                      setHfUploadError(null);
+                    }}
+                    disabled={isUploadingHf}
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-white/60 hover:text-white hover:bg-white/5 transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handlePushToHf}
+                    disabled={isUploadingHf || !isHfAuthenticated}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black font-bold text-xs transition-all shadow-lg shadow-amber-900/30 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isUploadingHf ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin" />
+                        <span>Publishing to Hub...</span>
+                      </>
+                    ) : (
+                      <>
+                        <UploadCloud size={14} />
+                        <span>Push Model to Hub</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Delete Confirmation Modal */}
       {modelToDelete && (
@@ -778,3 +1142,4 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
     </div>
   );
 };
+
