@@ -21,6 +21,7 @@ import {
 import { onnxService } from "../services/onnxInferenceService";
 import { Button } from "./Button";
 import { useEffect, useRef, useState } from "react";
+import { HUB_RECOMMENDED_MODELS, HubRecommendedModel } from "../constants";
 
 interface Message {
   role: "user" | "assistant" | "system";
@@ -45,6 +46,14 @@ interface VMLModel {
   };
 }
 
+export interface StarterModelInfo {
+  model: HubRecommendedModel;
+  isDownloaded: boolean;
+  status: "idle" | "downloading" | "ready" | "error";
+  progress: number;
+  message: string;
+}
+
 interface ChatViewProps {
   selectedModel: string;
   onModelChange: (model: string) => void;
@@ -57,11 +66,9 @@ const renderMessageList = (
   onScroll: any,
   stopStream: () => void,
   hasModels: boolean = true,
-  onDownloadQwen?: () => void,
-  qwenStatus?: string,
-  isDownloadingQwen?: boolean,
-  qwenMessage?: string,
-  qwenProgress?: number,
+  starterModels: StarterModelInfo[] = [],
+  onDownloadModel?: (repo_id: string, filename: string) => void,
+  onSelectModel?: (modelName: string) => void
 ) => {
   return (
     <div
@@ -73,65 +80,127 @@ const renderMessageList = (
         className={`flex-1 overflow-y-auto w-full scroll-smooth custom-scrollbar relative z-0`}
       >
         <div
-          className={`max-w-3xl mx-auto px-6 space-y-10 ${messages.length === 0 ? "h-full flex items-center justify-center" : "py-12"}`}
+          className={`max-w-4xl mx-auto px-6 space-y-10 ${messages.length === 0 ? "h-full flex items-center justify-center" : "py-12"}`}
         >
           {!hasModels ? (
-            <div className="flex flex-col items-center justify-center text-center space-y-6 max-w-md mx-auto p-8 rounded-3xl bg-gradient-to-b from-[#140F1D] to-[#0B090F] border border-purple-500/20 shadow-2xl animate-in fade-in duration-500">
+            <div className="flex flex-col items-center justify-center text-center space-y-6 max-w-2xl mx-auto p-8 rounded-3xl bg-gradient-to-b from-[#140F1D] to-[#0B090F] border border-purple-500/20 shadow-2xl animate-in fade-in duration-500">
               <div className="p-4 bg-purple-500/10 border border-purple-500/30 rounded-2xl text-purple-400 shadow-lg shadow-purple-500/10">
-                <Bot size={40} />
+                <Bot size={36} />
               </div>
-              <div>
-                <div className="flex items-center justify-center gap-2">
-                  <h3 className="text-lg font-bold text-white tracking-tight">Qwen2 0.5B Instruct</h3>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    ~379 MB
-                  </span>
-                </div>
-                <p className="text-xs text-white/50 mt-2 leading-relaxed">
-                  Ultra-fast, lightweight starter model. Download to immediately chat, benchmark, and test in the Arena.
+              <div className="space-y-1.5">
+                <h3 className="text-xl font-bold text-white tracking-tight">
+                  Starter SLM Suite • Instant Local Inference
+                </h3>
+                <p className="text-xs text-white/50 max-w-md mx-auto leading-relaxed">
+                  Download ultra-compact models to immediately chat, benchmark, and test in the Native Arena without cloud API tokens.
                 </p>
               </div>
 
-              <div className="flex items-center gap-2 text-[10px] text-white/40 font-mono">
-                <span>Qwen/Qwen2-0.5B</span> • <span>32K Context</span> • <span>Q4_K_M GGUF</span>
-              </div>
+              {/* Starter Models Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full text-left pt-2">
+                {starterModels.map((item) => {
+                  const m = item.model;
+                  const isDownloading = item.status === "downloading";
+                  const isReady = item.isDownloaded || item.status === "ready";
 
-              {qwenStatus === 'downloading' ? (
-                <div className="w-full space-y-2.5 p-3 rounded-2xl bg-black/40 border border-purple-500/30">
-                  <div className="flex justify-between items-center text-[11px] font-bold">
-                    <span className="text-purple-300 font-mono truncate mr-2">{qwenMessage || "Downloading..."}</span>
-                    <span className="text-amber-400 font-mono flex-none">{qwenProgress || 0}%</span>
-                  </div>
-                  <div className="w-full h-3 bg-black/60 rounded-full border border-purple-500/20 overflow-hidden relative shadow-inner p-0.5">
+                  return (
                     <div
-                      className="h-full bg-gradient-to-r from-purple-500 via-indigo-500 to-amber-400 rounded-full transition-all duration-300 shadow-[0_0_12px_rgba(168,85,247,0.5)]"
-                      style={{ width: `${Math.max(qwenProgress || 0, 3)}%` }}
-                    />
-                  </div>
-                </div>
-              ) : qwenMessage ? (
-                <div className="w-full text-[11px] text-amber-300 font-mono bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/20">
-                  {qwenMessage}
-                </div>
-              ) : null}
+                      key={m.filename}
+                      className={`p-5 rounded-2xl bg-[#0B090F] border transition-all duration-300 flex flex-col justify-between space-y-4 relative overflow-hidden ${
+                        isReady
+                          ? "border-emerald-500/30 hover:border-emerald-500/60"
+                          : m.architecture.includes("Bonsai")
+                          ? "border-cyan-500/30 hover:border-cyan-500/60"
+                          : "border-purple-500/30 hover:border-purple-500/60"
+                      }`}
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span
+                            className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                              isReady
+                                ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
+                                : m.architecture.includes("Bonsai")
+                                ? "bg-cyan-500/10 text-cyan-300 border-cyan-500/30"
+                                : "bg-purple-500/10 text-purple-300 border-purple-500/30"
+                            }`}
+                          >
+                            {isReady ? "Ready Locally" : m.quantization}
+                          </span>
 
-              <button
-                onClick={onDownloadQwen}
-                disabled={qwenStatus === 'downloading' || isDownloadingQwen}
-                className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:from-purple-900/50 disabled:to-indigo-900/50 text-white font-bold text-xs transition-all shadow-xl shadow-purple-900/30 flex items-center justify-center gap-2 scale-100 active:scale-95 cursor-pointer"
-              >
-                {qwenStatus === 'downloading' || isDownloadingQwen ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin" />
-                    <span>Downloading Qwen2 0.5B (~379 MB)...</span>
-                  </>
-                ) : (
-                  <>
-                    <Download size={16} />
-                    <span>Download & Test Qwen2 0.5B</span>
-                  </>
-                )}
-              </button>
+                          <span className="text-[11px] font-mono text-amber-400 font-bold">
+                            ~{m.size_mb} MB
+                          </span>
+                        </div>
+
+                        <div>
+                          <h4 className="text-sm font-bold text-white tracking-tight">
+                            {m.display_name}
+                          </h4>
+                          <p className="text-[11px] text-white/40 mt-1 leading-relaxed line-clamp-2">
+                            {m.description}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2 text-[10px] text-white/40 font-mono pt-1">
+                          <span>{m.parameters}</span> • <span>{m.context_length} Context</span>
+                        </div>
+                      </div>
+
+                      {/* Download Progress Bar */}
+                      {isDownloading && (
+                        <div className="space-y-2 p-2.5 rounded-xl bg-black/50 border border-cyan-500/30">
+                          <div className="flex justify-between items-center text-[10px] font-bold font-mono">
+                            <span className="text-cyan-300 truncate mr-2">{item.message || "Downloading..."}</span>
+                            <span className="text-amber-400 flex-none">{item.progress || 0}%</span>
+                          </div>
+                          <div className="w-full h-2 bg-black/60 rounded-full border border-cyan-500/20 overflow-hidden relative shadow-inner p-0.5">
+                            <div
+                              className="h-full bg-gradient-to-r from-cyan-500 via-indigo-500 to-amber-400 rounded-full transition-all duration-300 shadow-[0_0_8px_rgba(6,182,212,0.5)]"
+                              style={{ width: `${Math.max(item.progress || 0, 3)}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Action Button */}
+                      <div>
+                        {isReady ? (
+                          <button
+                            onClick={() => onSelectModel && onSelectModel(m.filename)}
+                            className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-all shadow-lg shadow-emerald-900/20 flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                          >
+                            <CheckCircle2 size={14} />
+                            <span>Select & Chat</span>
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => onDownloadModel && onDownloadModel(m.repo_id, m.filename)}
+                            disabled={isDownloading}
+                            className={`w-full py-2.5 px-4 rounded-xl text-white font-bold text-xs transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50 disabled:scale-100 ${
+                              m.architecture.includes("Bonsai")
+                                ? "bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 shadow-cyan-900/20"
+                                : "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 shadow-purple-900/20"
+                            }`}
+                          >
+                            {isDownloading ? (
+                              <>
+                                <Loader2 size={14} className="animate-spin" />
+                                <span>Downloading ({item.progress || 0}%)...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Download size={14} />
+                                <span>Download & Test (~{m.size_mb} MB)</span>
+                              </>
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           ) : messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center text-center space-y-4 opacity-60 animate-in fade-in zoom-in duration-700 select-none">
@@ -323,59 +392,86 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [nativeModels, setNativeModels] = useState<VMLModel[]>([]);
   const allModels = nativeModels;
 
-  const [qwenStatus, setQwenStatus] = useState<'idle' | 'downloading' | 'ready' | 'error'>('idle');
-  const [qwenMessage, setQwenMessage] = useState<string>('');
-  const [qwenProgress, setQwenProgress] = useState<number>(0);
-  const [isDownloadingQwen, setIsDownloadingQwen] = useState(false);
+  const [downloadStates, setDownloadStates] = useState<{
+    [filename: string]: { status: string; progress: number; message: string };
+  }>({});
 
-  const checkQwenStatus = async () => {
+  const checkStarterStatus = async () => {
     try {
-      const res = await fetch("http://127.0.0.1:2000/models/gguf_status?filename=qwen2-0_5b-instruct-q4_k_m.gguf");
-      if (res.ok) {
-        const data = await res.json();
-        if (data.is_present || data.status === 'ready') {
-          setQwenStatus('ready');
-          setQwenProgress(100);
-          fetchNativeModels();
-        } else if (data.status === 'downloading') {
-          setQwenStatus('downloading');
-          if (typeof data.progress === 'number') {
-            setQwenProgress(data.progress);
-          }
+      for (const rec of HUB_RECOMMENDED_MODELS) {
+        const res = await fetch(
+          `http://127.0.0.1:2000/models/gguf_status?filename=${encodeURIComponent(rec.filename)}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setDownloadStates((prev) => ({
+            ...prev,
+            [rec.filename]: {
+              status: data.status,
+              progress: data.progress || (data.is_present ? 100 : 0),
+              message: data.message || "",
+            },
+          }));
         }
-        if (data.message) setQwenMessage(data.message);
       }
+      fetchNativeModels();
     } catch (e) {}
   };
 
   useEffect(() => {
-    checkQwenStatus();
-    const interval = setInterval(checkQwenStatus, 2000);
+    checkStarterStatus();
+    const interval = setInterval(checkStarterStatus, 2500);
     return () => clearInterval(interval);
-  }, [qwenStatus]);
+  }, []);
 
-  const handleDownloadQwen = async () => {
-    setIsDownloadingQwen(true);
-    setQwenStatus('downloading');
+  const handleDownloadStarterModel = async (repo_id: string, filename: string) => {
+    setDownloadStates((prev) => ({
+      ...prev,
+      [filename]: { status: "downloading", progress: 5, message: "Initiating download..." },
+    }));
+
     try {
       const formData = new FormData();
-      formData.append('repo_id', 'Qwen/Qwen2-0.5B-Instruct-GGUF');
-      formData.append('filename', 'qwen2-0_5b-instruct-q4_k_m.gguf');
+      formData.append("repo_id", repo_id);
+      formData.append("filename", filename);
       const res = await fetch("http://127.0.0.1:2000/models/download_gguf", {
         method: "POST",
-        body: formData
+        body: formData,
       });
       if (res.ok) {
-        setQwenStatus('downloading');
-        setQwenMessage('Downloading Qwen2 0.5B from Hugging Face (~379 MB)...');
+        setDownloadStates((prev) => ({
+          ...prev,
+          [filename]: {
+            status: "downloading",
+            progress: 10,
+            message: "Downloading from Hugging Face...",
+          },
+        }));
       }
     } catch (e) {
-      setQwenStatus('error');
-      setQwenMessage('Failed to trigger download.');
-    } finally {
-      setIsDownloadingQwen(false);
+      setDownloadStates((prev) => ({
+        ...prev,
+        [filename]: { status: "error", progress: 0, message: "Failed to trigger download." },
+      }));
     }
   };
+
+  const starterModelInfos: StarterModelInfo[] = HUB_RECOMMENDED_MODELS.map((rec) => {
+    const isDownloaded = nativeModels.some(
+      (m) =>
+        m.name.toLowerCase() === rec.filename.toLowerCase() ||
+        m.name.toLowerCase().includes(rec.filename.toLowerCase().replace(".gguf", ""))
+    );
+    const dState = downloadStates[rec.filename];
+    return {
+      model: rec,
+      isDownloaded,
+      status: isDownloaded ? "ready" : ((dState?.status as any) || "idle"),
+      progress: isDownloaded ? 100 : dState?.progress || 0,
+      message: dState?.message || "",
+    };
+  });
+
 
   const [reportCopied, setReportCopied] = useState(false);
 
@@ -787,26 +883,44 @@ ${assistantMsg.content}`;
             <ChevronDown size={14} />
           </div>
         </div>
-        {allModels.length === 0 && (
-          <button
-            onClick={handleDownloadQwen}
-            disabled={qwenStatus === 'downloading' || isDownloadingQwen}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-600/20 border border-purple-500/30 text-purple-300 text-xs font-bold hover:bg-purple-600/30 transition-all cursor-pointer"
-            title="Download Qwen2 0.5B starter model"
-          >
-            {qwenStatus === 'downloading' || isDownloadingQwen ? (
-              <>
-                <Loader2 size={12} className="animate-spin" />
-                <span>Downloading...</span>
-              </>
-            ) : (
-              <>
-                <Download size={12} />
-                <span>Download Qwen2 0.5B (~379 MB)</span>
-              </>
-            )}
-          </button>
-        )}
+
+        {/* Quick Download Buttons for Starter Models not yet downloaded locally */}
+        {HUB_RECOMMENDED_MODELS.filter(
+          (rec) =>
+            !allModels.some(
+              (m) =>
+                m.name.toLowerCase() === rec.filename.toLowerCase() ||
+                m.name.toLowerCase().includes(rec.filename.toLowerCase().replace(".gguf", ""))
+            )
+        ).map((rec) => {
+          const dState = downloadStates[rec.filename];
+          const isDownloading = dState?.status === "downloading";
+          return (
+            <button
+              key={rec.filename}
+              onClick={() => handleDownloadStarterModel(rec.repo_id, rec.filename)}
+              disabled={isDownloading}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer disabled:opacity-50 ${
+                rec.architecture.includes("Bonsai")
+                  ? "bg-cyan-600/20 border-cyan-500/30 text-cyan-300 hover:bg-cyan-600/30 shadow-sm"
+                  : "bg-purple-600/20 border-purple-500/30 text-purple-300 hover:bg-purple-600/30 shadow-sm"
+              }`}
+              title={`Download & Test ${rec.display_name}`}
+            >
+              {isDownloading ? (
+                <>
+                  <Loader2 size={12} className="animate-spin" />
+                  <span>Downloading ({dState?.progress || 0}%)...</span>
+                </>
+              ) : (
+                <>
+                  <Download size={12} />
+                  <span>Get {rec.display_name.split(" ")[0]} {rec.parameters} (~{rec.size_mb} MB)</span>
+                </>
+              )}
+            </button>
+          );
+        })}
 
         {isOnnx && selectedObj && (
           <div className="flex items-center gap-2">
@@ -934,11 +1048,9 @@ ${assistantMsg.content}`;
             }
           },
           allModels.length > 0,
-          handleDownloadQwen,
-          qwenStatus,
-          isDownloadingQwen,
-          qwenMessage,
-          qwenProgress,
+          starterModelInfos,
+          handleDownloadStarterModel,
+          (name) => onModelChange(name)
         )}
 
         {isSplitMode && (
@@ -957,10 +1069,9 @@ ${assistantMsg.content}`;
                   }
                 },
                 allModels.length > 0,
-                handleDownloadQwen,
-                qwenStatus,
-                isDownloadingQwen,
-                qwenMessage,
+                starterModelInfos,
+                handleDownloadStarterModel,
+                (name) => setSelectedModel2(name)
               )}
             </div>
           </>

@@ -517,17 +517,28 @@ async def get_gguf_status(filename: Optional[str] = "qwen2-0_5b-instruct-q4_k_m.
     target_path = os.path.join(GGUF_DIR, filename)
     is_present = os.path.exists(target_path)
     with _gguf_download_lock:
-        status = "ready" if is_present else gguf_download_state.get("status", "idle")
-        if gguf_download_state.get("status") == "downloading" and not is_present:
+        is_current_download = (gguf_download_state.get("filename") == filename)
+        if is_present:
+            status = "ready"
+            progress = 100
+        elif is_current_download and gguf_download_state.get("status") == "downloading":
             status = "downloading"
+            progress = gguf_download_state.get("progress", 0)
+        elif is_current_download and gguf_download_state.get("status") == "error":
+            status = "error"
+            progress = 0
+        else:
+            status = "idle"
+            progress = 0
+
         return {
             "filename": filename,
             "is_present": is_present,
             "status": status,
-            "progress": gguf_download_state.get("progress", 0),
-            "downloaded_mb": gguf_download_state.get("downloaded_mb", 0),
-            "total_mb": gguf_download_state.get("total_mb", 0),
-            "message": gguf_download_state.get("message", "")
+            "progress": progress,
+            "downloaded_mb": gguf_download_state.get("downloaded_mb", 0) if is_current_download else 0,
+            "total_mb": gguf_download_state.get("total_mb", 0) if is_current_download else 0,
+            "message": gguf_download_state.get("message", "") if is_current_download else ""
         }
 
 @app.post("/models/download_gguf")
@@ -541,8 +552,8 @@ async def download_gguf_model(
         return {"status": "ready", "message": f"{filename} already exists locally."}
 
     with _gguf_download_lock:
-        if gguf_download_state["status"] == "downloading":
-            return {"status": "already_downloading", "message": "Download is already in progress."}
+        if gguf_download_state["status"] == "downloading" and gguf_download_state.get("filename") == filename:
+            return {"status": "already_downloading", "message": f"Download of {filename} is already in progress."}
         gguf_download_state["status"] = "downloading"
         gguf_download_state["repo_id"] = repo_id
         gguf_download_state["filename"] = filename
@@ -576,11 +587,21 @@ async def list_native_models():
                 if "q8_0" in f.lower(): quant = "Q8_0"
                 elif "q4_k" in f.lower(): quant = "Q4_K_M"
                 elif "q5" in f.lower(): quant = "Q5_K_M"
+                elif "q1_0" in f.lower() or "1bit" in f.lower() or "1-bit" in f.lower(): quant = "Q1_0 (1-bit)"
                 
                 params = "0.5B"
                 if "0.5b" in f.lower() or "0_5b" in f.lower(): params = "0.5B"
+                elif "1.7b" in f.lower() or "1_7b" in f.lower(): params = "1.7B"
                 elif "1.5b" in f.lower() or "1_5b" in f.lower(): params = "1.5B"
                 elif "7b" in f.lower(): params = "7B"
+                
+                arch = "Qwen2"
+                if "bonsai" in f.lower():
+                    arch = "Bonsai (1-bit)"
+                elif "qwen" in f.lower():
+                    arch = "Qwen2"
+                elif "llama" in f.lower():
+                    arch = "Llama"
                 
                 results.append({
                     "name": f,
@@ -591,7 +612,7 @@ async def list_native_models():
                     "created_at": mtime,
                     "quantization": quant,
                     "parameters": params,
-                    "architecture": "Qwen2" if "qwen" in f.lower() else "Llama",
+                    "architecture": arch,
                     "description": "Base quantized instruction-tuned model for local inference."
                 })
     

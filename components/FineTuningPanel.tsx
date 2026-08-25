@@ -58,6 +58,7 @@ export const FineTuningPanel: React.FC<FineTuningPanelProps> = ({
 
   const RECOMMENDED_MODELS = [
     { id: 'Qwen/Qwen2-0.5B', downloads: 1250000, likes: 4500, is_cpu_ready: true },
+    { id: 'prism-ml/Bonsai-1.7B-unpacked', downloads: 350000, likes: 980, is_cpu_ready: true },
     { id: 'HuggingFaceTB/SmolLM-135M', downloads: 850000, likes: 2200, is_cpu_ready: true },
     { id: 'microsoft/Phi-3-mini-4k-instruct', downloads: 3500000, likes: 8900, is_cpu_ready: true },
   ];

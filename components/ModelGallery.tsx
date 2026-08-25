@@ -12,8 +12,13 @@ import {
   RefreshCw,
   Trash2,
   AlertTriangle,
+  Download,
+  Loader2,
+  ExternalLink,
+  Cloud,
 } from "lucide-react";
 import { ChatView } from "./ChatView";
+import { HUB_RECOMMENDED_MODELS } from "../constants";
 
 export interface GalleryModelItem {
   name: string;
@@ -31,6 +36,11 @@ export interface GalleryModelItem {
   parameters?: string;
   architecture?: string;
   description?: string;
+  is_downloaded?: boolean;
+  repo_id?: string;
+  filename?: string;
+  hf_url?: string;
+  tags?: string[];
 }
 
 interface ModelGalleryProps {
@@ -42,11 +52,16 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
   initialSelectedModel,
   onNavigateToBuild,
 }) => {
-  const [models, setModels] = useState<GalleryModelItem[]>([]);
+  const [localModels, setLocalModels] = useState<GalleryModelItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [activeFilter, setActiveFilter] = useState<"all" | "adapter" | "base" | "onnx">("all");
+  const [activeFilter, setActiveFilter] = useState<"all" | "adapter" | "base" | "onnx" | "hub">("all");
   const [activeChatModel, setActiveChatModel] = useState<string | null>(initialSelectedModel || null);
+
+  // Model Download States
+  const [downloadStates, setDownloadStates] = useState<{
+    [filename: string]: { status: string; progress: number; message: string };
+  }>({});
 
   // Model Deletion State
   const [modelToDelete, setModelToDelete] = useState<GalleryModelItem | null>(null);
@@ -65,12 +80,76 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
       const res = await fetch("http://127.0.0.1:2000/list_native_models");
       if (res.ok) {
         const data = await res.json();
-        setModels(data.models || []);
+        setLocalModels(data.models || []);
       }
     } catch (e) {
       console.error("Failed fetching gallery models:", e);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleDownloadModel = async (repo_id: string, filename: string) => {
+    setDownloadStates((prev) => ({
+      ...prev,
+      [filename]: { status: "downloading", progress: 5, message: "Initiating download..." },
+    }));
+
+    try {
+      const formData = new FormData();
+      formData.append("repo_id", repo_id);
+      formData.append("filename", filename);
+
+      const res = await fetch("http://127.0.0.1:2000/models/download_gguf", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to start download");
+      }
+
+      // Poll status
+      const pollInterval = setInterval(async () => {
+        try {
+          const statusRes = await fetch(
+            `http://127.0.0.1:2000/models/gguf_status?filename=${encodeURIComponent(filename)}`
+          );
+          if (statusRes.ok) {
+            const data = await statusRes.json();
+            if (data.is_present || data.status === "ready") {
+              clearInterval(pollInterval);
+              setDownloadStates((prev) => ({
+                ...prev,
+                [filename]: { status: "ready", progress: 100, message: "Download Complete!" },
+              }));
+              await fetchModels();
+            } else if (data.status === "error") {
+              clearInterval(pollInterval);
+              setDownloadStates((prev) => ({
+                ...prev,
+                [filename]: { status: "error", progress: 0, message: data.message || "Download Failed." },
+              }));
+            } else if (data.status === "downloading") {
+              setDownloadStates((prev) => ({
+                ...prev,
+                [filename]: {
+                  status: "downloading",
+                  progress: data.progress || 0,
+                  message: data.message || "Downloading...",
+                },
+              }));
+            }
+          }
+        } catch (pollErr) {
+          console.error("Error polling download status:", pollErr);
+        }
+      }, 1500);
+    } catch (e: any) {
+      setDownloadStates((prev) => ({
+        ...prev,
+        [filename]: { status: "error", progress: 0, message: e.message || "Failed to trigger download." },
+      }));
     }
   };
 
@@ -108,15 +187,63 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
     fetchModels();
   }, []);
 
-  const filteredModels = models.filter((m) => {
-    const matchesFilter = activeFilter === "all" || m.type === activeFilter;
-    const query = searchQuery.toLowerCase();
+  // Build unified cards (local models + recommended hub models)
+  const allCards: GalleryModelItem[] = [
+    // 1. Local Models
+    ...localModels.map((m) => {
+      const matchingRec = HUB_RECOMMENDED_MODELS.find(
+        (rec) =>
+          m.name.toLowerCase() === rec.filename.toLowerCase() ||
+          m.name.toLowerCase().includes(rec.filename.toLowerCase().replace(".gguf", ""))
+      );
+      return {
+        ...m,
+        is_downloaded: true,
+        hf_url: matchingRec?.hf_url,
+        tags: matchingRec?.tags,
+      };
+    }),
+    // 2. Recommended Hub Models that are not downloaded locally yet
+    ...HUB_RECOMMENDED_MODELS.filter((rec) => {
+      return !localModels.some(
+        (m) =>
+          m.name.toLowerCase() === rec.filename.toLowerCase() ||
+          m.name.toLowerCase().includes(rec.filename.toLowerCase().replace(".gguf", ""))
+      );
+    }).map((rec) => ({
+      name: rec.filename,
+      display_name: rec.display_name,
+      source: "hub",
+      type: "base" as const,
+      size_mb: rec.size_mb,
+      quantization: rec.quantization,
+      parameters: rec.parameters,
+      architecture: rec.architecture,
+      description: rec.description,
+      is_downloaded: false,
+      repo_id: rec.repo_id,
+      filename: rec.filename,
+      hf_url: rec.hf_url,
+      tags: rec.tags,
+    })),
+  ];
+
+  const filteredModels = allCards.filter((m) => {
+    let matchesFilter = true;
+    if (activeFilter === "adapter") matchesFilter = m.type === "adapter";
+    else if (activeFilter === "base") matchesFilter = m.type === "base" && m.is_downloaded;
+    else if (activeFilter === "onnx") matchesFilter = m.type === "onnx";
+    else if (activeFilter === "hub") matchesFilter = !m.is_downloaded;
+
+    const query = searchQuery.toLowerCase().trim();
     const matchesQuery =
+      !query ||
       m.name.toLowerCase().includes(query) ||
       (m.display_name && m.display_name.toLowerCase().includes(query)) ||
       (m.dataset_id && m.dataset_id.toLowerCase().includes(query)) ||
       (m.architecture && m.architecture.toLowerCase().includes(query)) ||
-      (m.base_model && m.base_model.toLowerCase().includes(query));
+      (m.base_model && m.base_model.toLowerCase().includes(query)) ||
+      (m.tags && m.tags.some((t) => t.toLowerCase().includes(query)));
     return matchesFilter && matchesQuery;
   });
 
@@ -128,13 +255,14 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
     return `${mb.toFixed(2)} MB`;
   };
 
-  const totalSizeMb = models.reduce((acc, m) => acc + (m.size_mb || 0), 0);
-  const totalAdapters = models.filter((m) => m.type === "adapter").length;
-  const totalBaseGgufs = models.filter((m) => m.type === "base").length;
+  const totalLocalSizeMb = localModels.reduce((acc, m) => acc + (m.size_mb || 0), 0);
+  const totalAdapters = localModels.filter((m) => m.type === "adapter").length;
+  const totalBaseGgufs = localModels.filter((m) => m.type === "base").length;
+  const totalHubAvailable = allCards.filter((m) => !m.is_downloaded).length;
 
   // If a model is active for chat, render the integrated Arena Chat UI with top breadcrumb
   if (activeChatModel) {
-    const currentModelObj = models.find((m) => m.name === activeChatModel);
+    const currentModelObj = allCards.find((m) => m.name === activeChatModel);
     return (
       <div className="flex-1 flex flex-col h-full bg-[#0B090F] overflow-hidden animate-in fade-in duration-300">
         {/* Gallery Chat Breadcrumb Header */}
@@ -189,7 +317,7 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
                   Model Gallery & Weight Manager
                 </h1>
                 <p className="text-xs text-white/50 font-medium">
-                  Explore fine-tuned LoRA adapters, local base GGUFs, and in-browser ONNX models.
+                  Unified catalog of fine-tuned LoRA adapters, local base GGUFs, and Hub starter models (Qwen2 & Bonsai).
                 </p>
               </div>
             </div>
@@ -221,9 +349,9 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <div className="p-4 rounded-2xl bg-[#140F1D] border border-white/5 space-y-1">
             <span className="text-[11px] text-white/40 font-bold uppercase tracking-wider">
-              Total Models
+              Local Models
             </span>
-            <div className="text-2xl font-black text-white font-mono">{models.length}</div>
+            <div className="text-2xl font-black text-white font-mono">{localModels.length}</div>
           </div>
           <div className="p-4 rounded-2xl bg-[#140F1D] border border-white/5 space-y-1">
             <span className="text-[11px] text-amber-400/80 font-bold uppercase tracking-wider">
@@ -232,17 +360,17 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
             <div className="text-2xl font-black text-amber-400 font-mono">{totalAdapters}</div>
           </div>
           <div className="p-4 rounded-2xl bg-[#140F1D] border border-white/5 space-y-1">
-            <span className="text-[11px] text-purple-400/80 font-bold uppercase tracking-wider">
-              Base GGUF
+            <span className="text-[11px] text-cyan-400/80 font-bold uppercase tracking-wider">
+              Hub Available
             </span>
-            <div className="text-2xl font-black text-purple-400 font-mono">{totalBaseGgufs}</div>
+            <div className="text-2xl font-black text-cyan-400 font-mono">{totalHubAvailable}</div>
           </div>
           <div className="p-4 rounded-2xl bg-[#140F1D] border border-white/5 space-y-1">
             <span className="text-[11px] text-emerald-400/80 font-bold uppercase tracking-wider">
               Disk Footprint
             </span>
             <div className="text-2xl font-black text-emerald-400 font-mono">
-              {formatSize(totalSizeMb)}
+              {formatSize(totalLocalSizeMb)}
             </div>
           </div>
         </div>
@@ -259,7 +387,7 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
                   : "text-white/50 hover:text-white hover:bg-white/5"
               }`}
             >
-              All Models ({models.length})
+              All Models ({allCards.length})
             </button>
             <button
               onClick={() => setActiveFilter("adapter")}
@@ -281,7 +409,18 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
               }`}
             >
               <Box size={12} />
-              <span>Base GGUF ({totalBaseGgufs})</span>
+              <span>Local Base ({totalBaseGgufs})</span>
+            </button>
+            <button
+              onClick={() => setActiveFilter("hub")}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeFilter === "hub"
+                  ? "bg-cyan-600 text-white shadow-lg shadow-cyan-900/40"
+                  : "text-white/50 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              <Cloud size={12} />
+              <span>Hub Starters ({totalHubAvailable})</span>
             </button>
             <button
               onClick={() => setActiveFilter("onnx")}
@@ -292,7 +431,7 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
               }`}
             >
               <Cpu size={12} />
-              <span>ONNX Web ({models.filter((m) => m.type === "onnx").length})</span>
+              <span>ONNX Web ({localModels.filter((m) => m.type === "onnx").length})</span>
             </button>
           </div>
 
@@ -303,7 +442,7 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search local models..."
+              placeholder="Search local & Hub models..."
               className="w-full bg-[#0B090F] border border-white/10 rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-white/30 focus:outline-none focus:border-amber-500/50 transition-all"
             />
           </div>
@@ -313,7 +452,7 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20 text-white/40 space-y-3">
             <RefreshCw size={24} className="animate-spin text-amber-400" />
-            <span className="text-xs font-bold">Scanning local models...</span>
+            <span className="text-xs font-bold">Scanning local and Hub models...</span>
           </div>
         ) : filteredModels.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center space-y-4 rounded-3xl bg-[#140F1D]/50 border border-white/5 p-8">
@@ -339,17 +478,29 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredModels.map((model, idx) => {
               const isLoRA = model.type === "adapter";
-              const isBase = model.type === "base";
+              const isDownloaded = model.is_downloaded;
+              const isBase = model.type === "base" && isDownloaded;
+              const isHub = !isDownloaded;
+              const downloadState = model.filename ? downloadStates[model.filename] : null;
+              const isDownloading = downloadState?.status === "downloading";
 
               return (
                 <div
                   key={idx}
-                  onClick={() => setActiveChatModel(model.name)}
-                  className={`group rounded-3xl bg-[#140F1D] border transition-all duration-300 p-5 pt-4 flex flex-col justify-between space-y-4 relative overflow-hidden shadow-xl hover:shadow-2xl cursor-pointer ${
+                  onClick={() => {
+                    if (isDownloaded) {
+                      setActiveChatModel(model.name);
+                    }
+                  }}
+                  className={`group rounded-3xl bg-[#140F1D] border transition-all duration-300 p-5 pt-4 flex flex-col justify-between space-y-4 relative overflow-hidden shadow-xl hover:shadow-2xl ${
+                    isDownloaded ? "cursor-pointer" : "cursor-default"
+                  } ${
                     isLoRA
                       ? "border-amber-500/20 hover:border-amber-500/50 hover:shadow-amber-500/5"
                       : isBase
                       ? "border-purple-500/20 hover:border-purple-500/50 hover:shadow-purple-500/5"
+                      : isHub
+                      ? "border-cyan-500/20 hover:border-cyan-500/50 hover:shadow-cyan-500/5"
                       : "border-indigo-500/20 hover:border-indigo-500/50 hover:shadow-indigo-500/5"
                   }`}
                 >
@@ -360,6 +511,8 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
                         ? "bg-amber-500/5 group-hover:bg-amber-500/10"
                         : isBase
                         ? "bg-purple-500/5 group-hover:bg-purple-500/10"
+                        : isHub
+                        ? "bg-cyan-500/5 group-hover:bg-cyan-500/10"
                         : "bg-indigo-500/5 group-hover:bg-indigo-500/10"
                     }`}
                   />
@@ -373,6 +526,8 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
                             ? "bg-amber-500/10 text-amber-300 border-amber-500/30"
                             : isBase
                             ? "bg-purple-500/10 text-purple-300 border-purple-500/30"
+                            : isHub
+                            ? "bg-cyan-500/10 text-cyan-300 border-cyan-500/30"
                             : "bg-indigo-500/10 text-indigo-300 border-indigo-500/30"
                         }`}
                       >
@@ -385,6 +540,11 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
                           <>
                             <Box size={11} />
                             <span>Base GGUF</span>
+                          </>
+                        ) : isHub ? (
+                          <>
+                            <Cloud size={11} />
+                            <span>Hub Starter</span>
                           </>
                         ) : (
                           <>
@@ -402,17 +562,32 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
                           </span>
                         )}
 
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setModelToDelete(model);
-                            setDeleteError(null);
-                          }}
-                          className="p-1.5 rounded-xl text-white/30 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer"
-                          title="Delete Model"
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                        {model.hf_url && (
+                          <a
+                            href={model.hf_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="p-1.5 rounded-xl text-white/30 hover:text-white hover:bg-white/5 transition-all"
+                            title="View on Hugging Face"
+                          >
+                            <ExternalLink size={13} />
+                          </a>
+                        )}
+
+                        {isDownloaded && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setModelToDelete(model);
+                              setDeleteError(null);
+                            }}
+                            className="p-1.5 rounded-xl text-white/30 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer"
+                            title="Delete Model"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -432,6 +607,11 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
                   {/* Metadata Spec Pills */}
                   <div className="space-y-4 relative z-10 pt-2 border-t border-white/5">
                     <div className="flex flex-wrap gap-2 text-[10px] font-mono">
+                      {model.architecture && (
+                        <div className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/5 text-white/70">
+                          Arch: <span className="text-white font-semibold">{model.architecture}</span>
+                        </div>
+                      )}
                       {model.base_model && (
                         <div className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/5 text-white/70">
                           Base: <span className="text-white font-semibold">{model.base_model.split("/").pop()}</span>
@@ -459,29 +639,79 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
                       )}
                     </div>
 
+                    {/* Progress Bar if Downloading */}
+                    {isDownloading && (
+                      <div className="space-y-2 p-3 rounded-2xl bg-black/40 border border-cyan-500/30">
+                        <div className="flex justify-between items-center text-[10px] font-bold">
+                          <span className="text-cyan-300 font-mono truncate mr-2">{downloadState?.message || "Downloading..."}</span>
+                          <span className="text-amber-400 font-mono flex-none">{downloadState?.progress || 0}%</span>
+                        </div>
+                        <div className="w-full h-2 bg-black/60 rounded-full border border-cyan-500/20 overflow-hidden relative shadow-inner p-0.5">
+                          <div
+                            className="h-full bg-gradient-to-r from-cyan-500 via-indigo-500 to-amber-400 rounded-full transition-all duration-300 shadow-[0_0_8px_rgba(6,182,212,0.5)]"
+                            style={{ width: `${Math.max(downloadState?.progress || 0, 3)}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
                     {/* Action Footer */}
                     <div className="flex items-center justify-between pt-2">
-                      <span className="text-[10px] text-white/30 flex items-center gap-1 font-mono">
-                        <CheckCircle2 size={12} className="text-emerald-400" />
-                        <span>Ready to Chat</span>
-                      </span>
+                      {isDownloaded ? (
+                        <>
+                          <span className="text-[10px] text-emerald-400/80 flex items-center gap-1 font-mono">
+                            <CheckCircle2 size={12} className="text-emerald-400" />
+                            <span>Locally Available</span>
+                          </span>
 
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActiveChatModel(model.name);
-                        }}
-                        className={`px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition-all shadow-lg cursor-pointer ${
-                          isLoRA
-                            ? "bg-amber-500 hover:bg-amber-400 text-black shadow-amber-900/30 group-hover:scale-105"
-                            : isBase
-                            ? "bg-purple-600 hover:bg-purple-500 text-white shadow-purple-900/30 group-hover:scale-105"
-                            : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-900/30 group-hover:scale-105"
-                        }`}
-                      >
-                        <MessageSquare size={13} />
-                        <span>Chat Now</span>
-                      </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveChatModel(model.name);
+                            }}
+                            className={`px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition-all shadow-lg cursor-pointer ${
+                              isLoRA
+                                ? "bg-amber-500 hover:bg-amber-400 text-black shadow-amber-900/30 group-hover:scale-105"
+                                : isBase
+                                ? "bg-purple-600 hover:bg-purple-500 text-white shadow-purple-900/30 group-hover:scale-105"
+                                : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-900/30 group-hover:scale-105"
+                            }`}
+                          >
+                            <MessageSquare size={13} />
+                            <span>Chat Now</span>
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-[10px] text-cyan-400/70 flex items-center gap-1 font-mono">
+                            <Cloud size={12} className="text-cyan-400" />
+                            <span>Hugging Face Hub</span>
+                          </span>
+
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (model.repo_id && model.filename) {
+                                handleDownloadModel(model.repo_id, model.filename);
+                              }
+                            }}
+                            disabled={isDownloading}
+                            className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 disabled:from-cyan-900/50 disabled:to-indigo-900/50 text-white font-bold text-xs flex items-center gap-2 transition-all shadow-lg shadow-cyan-900/20 cursor-pointer group-hover:scale-105 active:scale-95 disabled:scale-100"
+                          >
+                            {isDownloading ? (
+                              <>
+                                <Loader2 size={13} className="animate-spin" />
+                                <span>Downloading...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Download size={13} />
+                                <span>Download & Test</span>
+                              </>
+                            )}
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -490,6 +720,7 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
           </div>
         )}
       </div>
+
 
       {/* Delete Confirmation Modal */}
       {modelToDelete && (
