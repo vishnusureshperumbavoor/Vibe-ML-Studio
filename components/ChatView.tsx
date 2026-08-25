@@ -276,7 +276,7 @@ const renderMessageList = (
                             <div className="flex items-center gap-1.5 text-purple-400/70">
                               <Clock size={10} />
                               <span>
-                                TTFT: {msg.stats.ttft}ms
+                                TTFT: {Math.round(msg.stats.ttft)}ms
                               </span>
                             </div>
                             <div className="flex items-center gap-1.5 text-indigo-400/70">
@@ -395,7 +395,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
     const report = `[VML Model Diagnostic Report]
 Model: ${selectedModel}
-TTFT: ${assistantMsg.stats?.ttft || 0}ms
+TTFT: ${Math.round(assistantMsg.stats?.ttft || 0)}ms
 Speed: ${assistantMsg.stats?.tps || 0} t/s
 
 --- USER QUERY ---

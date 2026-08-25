@@ -8,6 +8,7 @@ import {
   Star,
   Download,
   Database,
+  X,
 } from "lucide-react";
 
 export interface ModelResult {
@@ -41,6 +42,7 @@ export const SmartSelector: React.FC<SmartSelectorProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Fetch local data on mount for fast search
   useEffect(() => {
@@ -130,7 +132,6 @@ export const SmartSelector: React.FC<SmartSelectorProps> = ({
       }
 
       // Merge and unique-ify (prefer local if ID matches)
-      // For models, we compare normalized IDs
       const combined = [...localMatches];
       remoteResults.forEach((rem) => {
         const isAlreadyIn = combined.some(
@@ -171,119 +172,194 @@ export const SmartSelector: React.FC<SmartSelectorProps> = ({
     return () => clearTimeout(timer);
   }, [query]);
 
-  // Merge suggestions with any local matches
-  const displayResults =
-    query.length < 2
-      ? [
-          ...localData.map((d) => ({ ...d, is_local: true })),
-          ...(suggestions || []),
-        ].filter((v, i, a) => a.findIndex((t) => t.id === v.id) === i)
-      : results;
+  // All initial base suggestions + local items
+  const allInitialOptions = [
+    ...localData.map((d) => ({ ...d, is_local: true })),
+    ...(suggestions || []),
+  ].filter((v, i, a) => a.findIndex((t) => t.id === v.id) === i);
 
-  const isShowingSuggestions = query.length < 2;
+  // If query is unmodified / empty or matches the selected default value, show all options.
+  // Otherwise show search results or matching suggestions.
+  const displayResults = (() => {
+    if (!query || query === defaultValue || query.length < 2) {
+      return allInitialOptions;
+    }
+    if (results.length > 0) {
+      return results;
+    }
+    const qLower = query.toLowerCase();
+    const filtered = allInitialOptions.filter(
+      (opt) =>
+        opt.id.toLowerCase().includes(qLower) ||
+        (opt.display_name && opt.display_name.toLowerCase().includes(qLower))
+    );
+    return filtered.length > 0 ? filtered : allInitialOptions;
+  })();
+
+  const isShowingSuggestions = !query || query === defaultValue || query.length < 2 || results.length === 0;
 
   return (
     <div className="relative w-full" ref={containerRef}>
       <div className="relative group">
-        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-white/40 group-focus-within:text-amber-500 transition-colors">
+        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-white/40 group-focus-within:text-amber-500 transition-colors">
           <Search size={16} />
         </div>
         <input
+          ref={inputRef}
           type="text"
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
             setIsOpen(true);
           }}
-          onFocus={() => setIsOpen(true)}
+          onClick={() => setIsOpen(true)}
+          onFocus={(e) => {
+            setIsOpen(true);
+            e.target.select();
+          }}
           placeholder={placeholder}
-          className="w-full bg-[#0B090F] border border-white/10 rounded-2xl pl-10 pr-10 py-3.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-amber-500/50 focus:ring-4 focus:ring-amber-500/5 transition-all shadow-inner"
+          className="w-full bg-[#0B090F] border border-white/10 rounded-2xl pl-10 pr-16 py-3.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-amber-500/50 focus:ring-4 focus:ring-amber-500/5 transition-all shadow-inner cursor-pointer"
         />
-        <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-white/20">
-          {isLoading ? (
-            <Loader2 size={16} className="animate-spin text-amber-500" />
-          ) : (
-            <ChevronDown size={16} />
+        <div className="absolute inset-y-0 right-0 pr-2.5 flex items-center gap-1">
+          {isLoading && (
+            <Loader2 size={15} className="animate-spin text-amber-500 mr-1" />
           )}
+
+          {query && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setQuery("");
+                onSelect("");
+                setResults([]);
+                setIsOpen(true);
+                inputRef.current?.focus();
+              }}
+              className="p-1 rounded-lg text-white/30 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+              title="Clear selection"
+            >
+              <X size={14} />
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsOpen((prev) => !prev);
+              if (!isOpen) inputRef.current?.focus();
+            }}
+            className="p-1 rounded-lg text-white/40 hover:text-amber-400 hover:bg-white/10 transition-all cursor-pointer"
+            title="Toggle options dropdown"
+          >
+            <ChevronDown
+              size={16}
+              className={`transition-transform duration-200 ${isOpen ? "rotate-180 text-amber-400" : ""}`}
+            />
+          </button>
         </div>
       </div>
 
-      {isOpen && (displayResults.length > 0 || isLoading) && (
+      {isOpen && displayResults.length > 0 && (
         <div className="absolute z-50 w-full mt-2 bg-[#121016] border border-white/10 rounded-2xl shadow-2xl backdrop-blur-xl max-h-80 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200">
           <div className="p-2 space-y-1">
             {isShowingSuggestions && (
-              <div className="px-3 py-2 text-[10px] font-black text-amber-500/50 uppercase tracking-[0.2em] border-b border-white/5 mb-2 flex items-center gap-2">
-                <Star size={10} fill="currentColor" /> Quick Suggestions
+              <div className="px-3 py-2 text-[10px] font-black text-amber-500/50 uppercase tracking-[0.2em] border-b border-white/5 mb-1 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Star size={10} fill="currentColor" /> Available {type === "model" ? "Models" : "Datasets"}
+                </span>
+                <span className="text-[9px] font-mono text-white/30 lowercase">
+                  Click to select
+                </span>
               </div>
             )}
 
-            {displayResults.map((res) => (
-              <button
-                key={res.id}
-                onClick={() => {
-                  skipSearchRef.current = true;
-                  const cleanName =
-                    res.is_local && type === "dataset"
-                      ? res.id.replace(".jsonl", "")
-                      : res.id;
-                  setQuery(cleanName);
-                  onSelect(res.id);
-                  setIsOpen(false);
-                  setResults([]);
-                }}
-                className="w-full flex flex-col items-start p-3 rounded-xl hover:bg-white/5 transition-all text-left group border border-transparent hover:border-white/10"
-              >
-                <div className="flex items-center justify-between w-full gap-2">
-                  <span className="text-sm font-bold text-white group-hover:text-amber-400 transition-colors truncate">
-                    {res.is_local && type === "dataset"
-                      ? res.id.replace(".jsonl", "")
-                      : res.id}
-                  </span>
-                  <div className="flex items-center gap-1.5 flex-none text-[10px] font-bold">
-                    {res.is_local && (
-                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]">
-                        <Database size={10} /> LOCAL
+            {displayResults.map((res) => {
+              const isCurrentlySelected = res.id === query || res.id === defaultValue;
+              return (
+                <button
+                  key={res.id}
+                  type="button"
+                  onClick={() => {
+                    skipSearchRef.current = true;
+                    const cleanName =
+                      res.is_local && type === "dataset"
+                        ? res.id.replace(".jsonl", "")
+                        : res.id;
+                    setQuery(cleanName);
+                    onSelect(res.id);
+                    setIsOpen(false);
+                    setResults([]);
+                  }}
+                  className={`w-full flex flex-col items-start p-3 rounded-xl transition-all text-left group border cursor-pointer ${
+                    isCurrentlySelected
+                      ? "bg-amber-500/10 border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.05)]"
+                      : "hover:bg-white/5 border-transparent hover:border-white/10"
+                  }`}
+                >
+                  <div className="flex items-center justify-between w-full gap-2">
+                    <span
+                      className={`text-sm font-bold transition-colors truncate ${
+                        isCurrentlySelected
+                          ? "text-amber-400"
+                          : "text-white group-hover:text-amber-400"
+                      }`}
+                    >
+                      {res.is_local && type === "dataset"
+                        ? res.id.replace(".jsonl", "")
+                        : res.id}
+                    </span>
+                    <div className="flex items-center gap-1.5 flex-none text-[10px] font-bold">
+                      {isCurrentlySelected && (
+                        <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[9px]">
+                          SELECTED
+                        </span>
+                      )}
+                      {res.is_local && (
+                        <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]">
+                          <Database size={10} /> LOCAL
+                        </span>
+                      )}
+                      {res.is_cpu_ready && (
+                        <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          <Cpu size={10} /> CPU READY
+                        </span>
+                      )}
+                      {res.gated && (
+                        <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                          <Lock size={10} /> GATED
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-4 mt-2 text-[10px] text-white/40 font-medium">
+                    {res.is_local ? (
+                      <span className="flex items-center gap-1 text-emerald-400/60 uppercase">
+                        Local {type === "model" ? "Base Model" : "Dataset"}{" "}
+                        {res.size_kb
+                          ? `• ${res.size_kb > 1024 ? `${(res.size_kb / 1024).toFixed(1)} MB` : `${res.size_kb} KB`}`
+                          : ""}
                       </span>
-                    )}
-                    {res.is_cpu_ready && (
-                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                        <Cpu size={10} /> CPU READY
-                      </span>
-                    )}
-                    {res.gated && (
-                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                        <Lock size={10} /> GATED
-                      </span>
+                    ) : (
+                      <>
+                        {res.downloads !== undefined && (
+                          <span className="flex items-center gap-1">
+                            <Download size={10} /> {res.downloads.toLocaleString()}
+                          </span>
+                        )}
+                        {res.likes !== undefined && (
+                          <span className="flex items-center gap-1">
+                            <Star size={10} /> {res.likes.toLocaleString()}
+                          </span>
+                        )}
+                      </>
                     )}
                   </div>
-                </div>
-
-                <div className="flex items-center gap-4 mt-2 text-[10px] text-white/40 font-medium">
-                  {res.is_local ? (
-                    <span className="flex items-center gap-1 text-emerald-400/60 uppercase">
-                      Local {type === "model" ? "Base Model" : "Dataset"}{" "}
-                      {res.size_kb
-                        ? `• ${res.size_kb > 1024 ? `${(res.size_kb / 1024).toFixed(1)} MB` : `${res.size_kb} KB`}`
-                        : ""}
-                    </span>
-                  ) : (
-                    <>
-                      <span className="flex items-center gap-1">
-                        <Download size={10} /> {res.downloads.toLocaleString()}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Star size={10} /> {res.likes.toLocaleString()}
-                      </span>
-                    </>
-                  )}
-                </div>
-              </button>
-            ))}
-            {!isLoading && results.length === 0 && query.length >= 2 && (
-              <div className="p-4 text-center text-xs text-white/20 italic">
-                No matching {type}s found.
-              </div>
-            )}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}

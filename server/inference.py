@@ -143,7 +143,7 @@ class NativeInferenceManager:
                     
                     yield {
                         "content": text,
-                        "ttft": round(ttft, 2) if ttft else 0,
+                        "ttft": round(ttft) if ttft else 0,
                         "tps": round(tps, 2)
                     }
 

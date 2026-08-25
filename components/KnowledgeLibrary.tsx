@@ -168,7 +168,7 @@ export function KnowledgeLibrary({
 
   // Distillation Modal State
   const [distillTarget, setDistillTarget] = useState<DatasetCardItem | null>(null);
-  const [distillPersona, setDistillPersona] = useState("Clinical Radiologist & Medical Specialist");
+  const [distillPersona, setDistillPersona] = useState("");
 
   // Deletion State
   const [itemToDelete, setItemToDelete] = useState<{ id: string; type: "local" | "collection" | "text_source"; name: string } | null>(null);

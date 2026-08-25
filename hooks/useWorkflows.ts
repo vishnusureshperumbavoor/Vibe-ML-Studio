@@ -113,7 +113,7 @@ export function useWorkflows({
   const [sftHardware, setSftHardware] = useState("CPU");
   const [sftMaxSteps, setSftMaxSteps] = useState(20);
   const [sftRank, setSftRank] = useState(16);
-  const [sftPersona, setSftPersona] = useState("Clinical Radiologist & Medical Specialist");
+  const [sftPersona, setSftPersona] = useState("");
 
   const handleStartDeployment = async (
     path: string,
@@ -210,7 +210,7 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
             hardware_target: hardware,
             max_steps: maxSteps,
             rank: rank,
-            persona: persona || "Clinical Radiologist & Medical Specialist",
+            persona: persona || "",
           },
         }),
       });

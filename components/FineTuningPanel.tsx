@@ -44,7 +44,7 @@ export const FineTuningPanel: React.FC<FineTuningPanelProps> = ({
   setMaxSteps,
   rank,
   setRank,
-  persona = "Clinical Radiologist & Medical Specialist",
+  persona = "",
   setPersona
 }) => {
 
@@ -63,6 +63,7 @@ export const FineTuningPanel: React.FC<FineTuningPanelProps> = ({
   ];
 
   const RECOMMENDED_DATASETS = [
+    { id: 'vishnusureshperumbavoor/vsp_alpaca', downloads: 15, likes: 5 },
     { id: 'lavita/MedQuAD', downloads: 85000, likes: 320 },
     { id: 'tatsu-lab/alpaca', downloads: 450000, likes: 1200 },
     { id: 'yahma/alpaca-cleaned', downloads: 220000, likes: 850 },
@@ -176,6 +177,7 @@ export const FineTuningPanel: React.FC<FineTuningPanelProps> = ({
         <div className="flex flex-wrap items-center gap-1.5 pt-1">
           <span className="text-[9px] text-white/30 font-bold uppercase tracking-wider mr-1">Presets:</span>
           {[
+            { label: "⚡ VSP", value: "Vishnu Suresh Perumbavoor - AI Engineer, Researcher & Open-Source Developer" },
             { label: "🩺 Clinical Radiologist", value: "Clinical Radiologist & Medical Specialist" },
             { label: "🏥 Medical Doctor", value: "Medical Doctor & Clinical Specialist" },
             { label: "💻 AI & Python Engineer", value: "Senior AI & Python Engineer" },

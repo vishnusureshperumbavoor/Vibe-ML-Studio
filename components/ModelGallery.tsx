@@ -120,6 +120,14 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
     return matchesFilter && matchesQuery;
   });
 
+  const formatSize = (mb?: number) => {
+    if (mb === undefined || mb === null || mb <= 0) return "0.00 MB";
+    if (mb >= 1024) {
+      return `${(mb / 1024).toFixed(2)} GB`;
+    }
+    return `${mb.toFixed(2)} MB`;
+  };
+
   const totalSizeMb = models.reduce((acc, m) => acc + (m.size_mb || 0), 0);
   const totalAdapters = models.filter((m) => m.type === "adapter").length;
   const totalBaseGgufs = models.filter((m) => m.type === "base").length;
@@ -139,39 +147,24 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
               <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform" />
               <span>Back to Gallery</span>
             </button>
-
-            <div className="h-4 w-px bg-white/10" />
-
+            <div className="h-4 w-[1px] bg-white/10" />
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-white tracking-wide">
+              <span className="text-xs font-mono text-white/50">Model:</span>
+              <span className="text-xs font-mono font-bold text-amber-400">
                 {currentModelObj?.display_name || activeChatModel}
               </span>
-              <span
-                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                  currentModelObj?.type === "adapter"
-                    ? "bg-amber-500/10 text-amber-300 border-amber-500/20"
-                    : "bg-purple-500/10 text-purple-300 border-purple-500/20"
-                }`}
-              >
-                {currentModelObj?.type === "adapter" ? "LoRA Fine-Tuned" : "Base GGUF"}
-              </span>
-              {currentModelObj?.dataset_id && (
-                <span className="text-[10px] font-mono text-white/50 bg-white/5 px-2 py-0.5 rounded-full border border-white/5">
-                  {currentModelObj.dataset_id}
-                </span>
-              )}
             </div>
           </div>
-
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-mono text-white/40">
-              VML Native Engine
+            <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-mono font-bold flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Active Session
             </span>
           </div>
         </div>
 
-        {/* Embedded Full-Featured Arena Chat */}
-        <div className="flex-1 flex overflow-hidden relative">
+        {/* Embedded Chat View with active model pre-selected */}
+        <div className="flex-1 overflow-hidden">
           <ChatView
             selectedModel={activeChatModel}
             onModelChange={(newModel) => setActiveChatModel(newModel)}
@@ -182,35 +175,40 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-[#0B090F] overflow-y-auto p-6 md:p-8 space-y-8 w-full animate-in fade-in duration-500">
-      {/* Top Banner & Telemetry */}
-      <div className="max-w-7xl mx-auto w-full space-y-6">
+    <div className="flex-1 flex flex-col h-full bg-[#0B090F] overflow-y-auto">
+      {/* Top Banner / Header */}
+      <div className="p-8 max-w-7xl w-full mx-auto space-y-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 pb-6">
-          <div>
-            <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight flex items-center gap-3">
-              <Sparkles className="text-amber-400" size={28} />
-              <span>Model Gallery</span>
-            </h2>
-            <p className="text-sm text-white/40 mt-1">
-              Explore, manage, and instantly chat with your local fine-tuned and quantized LLMs.
-            </p>
+          <div className="space-y-1">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-2xl bg-gradient-to-br from-amber-500/20 to-purple-500/20 border border-amber-500/30 text-amber-400 shadow-lg shadow-amber-500/5">
+                <Sparkles className="text-amber-400" size={28} />
+              </div>
+              <div>
+                <h1 className="text-2xl font-black text-white tracking-tight">
+                  Model Gallery & Weight Manager
+                </h1>
+                <p className="text-xs text-white/50 font-medium">
+                  Explore fine-tuned LoRA adapters, local base GGUFs, and in-browser ONNX models.
+                </p>
+              </div>
+            </div>
           </div>
 
           <div className="flex items-center gap-3">
             <button
               onClick={fetchModels}
               disabled={isLoading}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/10 text-xs font-bold transition-all cursor-pointer"
-              title="Refresh Models"
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/10 text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
+              title="Refresh models list"
             >
               <RefreshCw size={14} className={isLoading ? "animate-spin" : ""} />
               <span>Refresh</span>
             </button>
-
             {onNavigateToBuild && (
               <button
                 onClick={onNavigateToBuild}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-bold text-xs transition-all shadow-lg shadow-amber-900/20 cursor-pointer"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-bold text-xs shadow-lg shadow-amber-500/20 transition-all cursor-pointer active:scale-95"
               >
                 <Zap size={14} />
                 <span>Fine-Tune New Model</span>
@@ -244,9 +242,7 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
               Disk Footprint
             </span>
             <div className="text-2xl font-black text-emerald-400 font-mono">
-              {totalSizeMb > 1024
-                ? `${(totalSizeMb / 1024).toFixed(2)} GB`
-                : `${totalSizeMb} MB`}
+              {formatSize(totalSizeMb)}
             </div>
           </div>
         </div>
@@ -402,11 +398,7 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
                         {model.size_mb !== undefined && (
                           <span className="text-[11px] font-mono text-white/50 flex items-center gap-1">
                             <HardDrive size={11} />
-                            <span>
-                              {model.size_mb > 1024
-                                ? `${(model.size_mb / 1024).toFixed(2)} GB`
-                                : `${model.size_mb} MB`}
-                            </span>
+                            <span>{formatSize(model.size_mb)}</span>
                           </span>
                         )}
 
@@ -517,7 +509,7 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
               Are you sure you want to delete <strong className="text-white">{modelToDelete.display_name || modelToDelete.name}</strong>?
               {modelToDelete.size_mb !== undefined && (
                 <span className="block mt-1 text-white/40">
-                  This will free {modelToDelete.size_mb > 1024 ? `${(modelToDelete.size_mb / 1024).toFixed(2)} GB` : `${modelToDelete.size_mb} MB`} of disk space.
+                  This will free {formatSize(modelToDelete.size_mb)} of disk space.
                 </span>
               )}
             </p>
