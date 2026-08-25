@@ -1,16 +1,12 @@
 import React from "react";
 import { WorkFlowSwitcher } from "./WorkFlowSwitcher";
 import { FineTuningPanel } from "./FineTuningPanel";
-import { QuantizationPanel } from "./QuantizationPanel";
-import { OnnxPanel } from "./OnnxPanel";
-import { VisionPanel } from "./VisionPanel";
-import { BenchmarkPanel } from "./BenchmarkPanel";
+import { StudioView } from "./StudioView";
+import { CellData, CellType } from "../types";
 
 interface WorkflowViewProps {
-  workflowMode: "quantize" | "finetune" | "evaluate" | "onnx" | "vision";
-  setWorkflowMode: (
-    mode: "quantize" | "finetune" | "evaluate" | "onnx" | "vision"
-  ) => void;
+  workflowMode: "finetune" | "studio";
+  setWorkflowMode: (mode: "finetune" | "studio") => void;
   isWorkflowExecuting: boolean;
   systemInfo: any;
   preSelectedDataset: string | null;
@@ -34,10 +30,29 @@ interface WorkflowViewProps {
     maxSteps: number,
     rank: number
   ) => void;
-  onStartQuantization: (modelId: string, bits: string) => void;
-  onStartOnnx: (adapterSlug: string, precision: string) => void;
   onNavigateToChat: (model?: string) => void;
-  onNavigateToCreative: () => void;
+
+  // Studio Notebook Props
+  cells: CellData[];
+  activeCellId: string | null;
+  isAutoRunning: boolean;
+  isGenerating: boolean;
+  clarification: string | null;
+  activeTrainingSession: {
+    modelId: string;
+    datasetId: string;
+    maxSteps: number;
+    startTime: number;
+  } | null;
+  thinkingHistory: string[];
+  onFocusCell: (id: string) => void;
+  onChangeCell: (id: string, content: string) => void;
+  onRunCell: (id: string) => void;
+  onDeleteCell: (id: string) => void;
+  onMoveUpCell: (id: string) => void;
+  onMoveDownCell: (id: string) => void;
+  onTypeChangeCell: (id: string, type: CellType) => void;
+  onDismissClarification: () => void;
 }
 
 export const WorkflowView: React.FC<WorkflowViewProps> = ({
@@ -60,18 +75,31 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
   sftRank,
   setSftRank,
   onStartSFT,
-  onStartQuantization,
-  onStartOnnx,
   onNavigateToChat,
-  onNavigateToCreative,
+
+  cells,
+  activeCellId,
+  isAutoRunning,
+  isGenerating,
+  clarification,
+  activeTrainingSession,
+  thinkingHistory,
+  onFocusCell,
+  onChangeCell,
+  onRunCell,
+  onDeleteCell,
+  onMoveUpCell,
+  onMoveDownCell,
+  onTypeChangeCell,
+  onDismissClarification,
 }) => {
   return (
-    <div className="flex-1 flex flex-col bg-[#0B090F] overflow-y-auto p-8 items-center space-y-10">
-      <div className="text-center space-y-3 max-w-2xl shrink-0">
+    <div className="flex-1 flex flex-col bg-[#0B090F] overflow-y-auto p-6 items-center space-y-8 w-full">
+      <div className="text-center space-y-2 max-w-2xl shrink-0">
         <h2 className="text-3xl font-black text-white tracking-tighter uppercase">
           Model Production Center
         </h2>
-        <p className="text-sm text-white/40">Create your Expert LLMs.</p>
+        <p className="text-sm text-white/40">Fine-Tune & Train your Expert LLMs.</p>
       </div>
 
       <WorkFlowSwitcher
@@ -79,10 +107,9 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
         onChange={setWorkflowMode}
       />
 
-      <div className="w-full max-w-4xl bg-[#140F1D] border border-white/5 rounded-[32px] p-8 shadow-2xl relative group shrink-0">
-        <div className="absolute top-0 right-0 p-12 bg-amber-500/5 blur-[120px] rounded-full group-hover:bg-amber-500/10 transition-colors duration-1000" />
-
-        {workflowMode === "finetune" ? (
+      {workflowMode === "finetune" ? (
+        <div className="w-full max-w-4xl bg-[#140F1D] border border-white/5 rounded-[32px] p-8 shadow-2xl relative group shrink-0">
+          <div className="absolute top-0 right-0 p-12 bg-amber-500/5 blur-[120px] rounded-full group-hover:bg-amber-500/10 transition-colors duration-1000" />
           <FineTuningPanel
             onStart={onStartSFT}
             isExecuting={isWorkflowExecuting}
@@ -102,28 +129,29 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
             rank={sftRank}
             setRank={setSftRank}
           />
-        ) : workflowMode === "quantize" ? (
-          <QuantizationPanel
-            onStart={onStartQuantization}
-            isExecuting={isWorkflowExecuting}
-            deploymentUrl={deploymentUrl}
-            onTestInArena={(filename) => {
-              onNavigateToChat(filename || workflowModelFilename || undefined);
-            }}
+        </div>
+      ) : (
+        <div className="w-full flex-1 min-h-[600px] flex flex-col bg-[#0B090F] rounded-2xl border border-white/5 overflow-hidden">
+          <StudioView
+            cells={cells}
+            activeCellId={activeCellId}
+            isAutoRunning={isAutoRunning}
+            isGenerating={isGenerating}
+            clarification={clarification}
+            activeTrainingSession={activeTrainingSession}
+            thinkingHistory={thinkingHistory}
+            onFocusCell={onFocusCell}
+            onChangeCell={onChangeCell}
+            onRunCell={onRunCell}
+            onDeleteCell={onDeleteCell}
+            onMoveUpCell={onMoveUpCell}
+            onMoveDownCell={onMoveDownCell}
+            onTypeChangeCell={onTypeChangeCell}
+            onOpenArena={onNavigateToChat}
+            onDismissClarification={onDismissClarification}
           />
-        ) : workflowMode === "onnx" ? (
-          <OnnxPanel
-            onStart={onStartOnnx}
-            isExecuting={isWorkflowExecuting}
-          />
-        ) : workflowMode === "vision" ? (
-          <VisionPanel
-            onNavigateToCreative={onNavigateToCreative}
-          />
-        ) : (
-          <BenchmarkPanel systemInfo={systemInfo} />
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

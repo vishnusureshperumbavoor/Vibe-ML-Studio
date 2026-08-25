@@ -5,9 +5,11 @@ import { executeCode, fixCodeError } from "../services/aiService";
 import { generateOnnxExportScript } from "../services/workflowService";
 import { API_BASE } from "../constants";
 
+import { TopLevelView } from "../components/AppHeader";
+
 interface UseWorkflowsProps {
   setCells: React.Dispatch<React.SetStateAction<CellData[]>>;
-  setActiveView: (view: "studio" | "chat" | "workflow" | "knowledge" | "creative") => void;
+  setActiveView: (view: TopLevelView) => void;
   setThinking: (thinking: string | null) => void;
   setThinkingHistory: React.Dispatch<React.SetStateAction<string[]>>;
   mode: ExecutionMode;
@@ -20,9 +22,7 @@ export function useWorkflows({
   setThinkingHistory,
   mode,
 }: UseWorkflowsProps) {
-  const [workflowMode, setWorkflowMode] = useState<
-    "quantize" | "finetune" | "evaluate" | "onnx" | "vision"
-  >("finetune");
+  const [workflowMode, setWorkflowMode] = useState<"finetune" | "studio">("finetune");
   const [isWorkflowExecuting, setIsWorkflowExecuting] = useState(false);
   const [deploymentUrl, setDeploymentUrl] = useState<string | null>(null);
   const [workflowModelFilename, setWorkflowModelFilename] = useState<string | null>(null);
@@ -34,11 +34,11 @@ export function useWorkflows({
     startTime: number;
   } | null>(null);
 
-  // SFT persistent state
-  const [sftModelId, setSftModelId] = useState("");
-  const [sftDatasetId, setSftDatasetId] = useState("");
+  // SFT persistent state (Optimized for CPU & 32GB RAM)
+  const [sftModelId, setSftModelId] = useState("Qwen/Qwen2-0.5B");
+  const [sftDatasetId, setSftDatasetId] = useState("lavita/MedQuAD");
   const [sftHardware, setSftHardware] = useState("CPU");
-  const [sftMaxSteps, setSftMaxSteps] = useState(5);
+  const [sftMaxSteps, setSftMaxSteps] = useState(50);
   const [sftRank, setSftRank] = useState(16);
 
   const handleStartDeployment = async (
@@ -138,7 +138,8 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
         blocks = JSON.parse(jsonStr);
       }
 
-      setActiveView("studio");
+      setWorkflowMode("studio");
+      setActiveView("workflow");
 
       for (const blockScript of blocks) {
         const cellId = uuidv4();
@@ -364,7 +365,8 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
         }
       }
 
-      setActiveView("studio");
+      setWorkflowMode("studio");
+      setActiveView("workflow");
 
       for (const blockScript of blocks) {
         const cellId = uuidv4();
@@ -427,7 +429,8 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
 
   const handleStartOnnx = async (adapterSlug: string, precision: string) => {
     setIsWorkflowExecuting(true);
-    setActiveView("studio");
+    setWorkflowMode("studio");
+    setActiveView("workflow");
 
     const code = generateOnnxExportScript(adapterSlug, precision);
     const cellId = uuidv4();

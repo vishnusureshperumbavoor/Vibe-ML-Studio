@@ -1,18 +1,15 @@
 import React from 'react';
-import { Cpu, Zap, Box, BarChart2, Sparkles } from 'lucide-react';
+import { Zap, Terminal } from 'lucide-react';
 
 interface WorkFlowSwitcherProps {
-  active: 'quantize' | 'finetune' | 'evaluate' | 'onnx' | 'vision';
-  onChange: (mode: 'quantize' | 'finetune' | 'evaluate' | 'onnx' | 'vision') => void;
+  active: 'finetune' | 'studio';
+  onChange: (mode: 'finetune' | 'studio') => void;
 }
 
 export const WorkFlowSwitcher: React.FC<WorkFlowSwitcherProps> = ({ active, onChange }) => {
-  const tabs: { id: 'finetune' | 'quantize' | 'evaluate' | 'onnx' | 'vision'; label: string; icon: React.ReactNode }[] = [
+  const tabs: { id: 'finetune' | 'studio'; label: string; icon: React.ReactNode }[] = [
     { id: 'finetune', label: 'FINE-TUNING', icon: <Zap size={14} fill={active === 'finetune' ? 'currentColor' : 'none'} /> },
-    { id: 'quantize', label: 'GGUF', icon: <Box size={14} /> },
-    { id: 'evaluate', label: 'EVALUATION', icon: <BarChart2 size={14} /> },
-    { id: 'onnx', label: 'ONNX', icon: <Cpu size={14} /> },
-    { id: 'vision', label: 'DIFFUSION', icon: <Sparkles size={14} /> },
+    { id: 'studio', label: 'STUDIO NOTEBOOK', icon: <Terminal size={14} /> },
   ];
 
   return (

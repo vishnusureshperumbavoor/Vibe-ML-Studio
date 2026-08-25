@@ -145,10 +145,8 @@ const renderMessageList = (
               </button>
             </div>
           ) : messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center text-center space-y-8 opacity-60 animate-in fade-in zoom-in duration-700">
-              <div className="p-8 bg-purple-500/5 border border-purple-500/10 rounded-[2.5rem] shadow-2xl shadow-purple-500/5">
-                <Sparkles size={64} className="text-purple-400/50" />
-              </div>
+            <div className="flex flex-col items-center justify-center text-center space-y-4 opacity-60 animate-in fade-in zoom-in duration-700 select-none">
+              <Sparkles size={48} className="text-purple-400/50" />
               <p className="text-[#E2D8F0] text-2xl font-light tracking-tight italic">
                 "What shall we create today?"
               </p>

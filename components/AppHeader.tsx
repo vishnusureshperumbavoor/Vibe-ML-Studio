@@ -4,17 +4,27 @@ import {
   Zap,
   Activity,
   MessageSquare,
-  Terminal,
   Database,
   StopCircle,
+  Box,
+  BarChart2,
+  Cpu,
 } from "lucide-react";
 import { Button } from "./Button";
 
+export type TopLevelView =
+  | "knowledge"
+  | "workflow"
+  | "gguf"
+  | "evaluate"
+  | "onnx"
+  | "chat"
+  | "creative"
+  | "studio";
+
 interface AppHeaderProps {
-  activeView: "studio" | "chat" | "workflow" | "knowledge" | "creative";
-  setActiveView: (
-    view: "studio" | "chat" | "workflow" | "knowledge" | "creative"
-  ) => void;
+  activeView: TopLevelView;
+  setActiveView: (view: TopLevelView) => void;
   isAutoRunning: boolean;
   onStopAutoPilot: () => void;
 }
@@ -63,12 +73,12 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
 
       <div className="flex items-center gap-2">
         {/* View Switcher */}
-        <div className="flex bg-[#0B090F] p-1 rounded-xl border border-[#352554] mr-2">
+        <div className="flex bg-[#0B090F] p-1 rounded-xl border border-[#352554] mr-2 gap-1">
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setActiveView("knowledge")}
-            className={`gap-2 h-10 px-4 rounded-xl transition-all duration-300 border ${
+            className={`gap-2 h-10 px-3.5 rounded-xl transition-all duration-300 border ${
               activeView === "knowledge"
                 ? "bg-indigo-500/20 text-indigo-200 border-indigo-500/40 shadow-[0_0_15px_rgba(99,102,241,0.15)]"
                 : "text-gray-400 border-transparent hover:bg-white/5"
@@ -77,37 +87,40 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
             <Database size={16} />
             <span className="text-xs font-semibold">Knowledge</span>
           </Button>
+
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setActiveView("workflow")}
-            className={`gap-2 h-10 px-4 rounded-xl transition-all duration-300 border ${
-              activeView === "workflow"
+            className={`gap-2 h-10 px-3.5 rounded-xl transition-all duration-300 border ${
+              activeView === "workflow" || activeView === "studio"
                 ? "bg-amber-500/20 text-amber-200 border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
                 : "text-gray-400 border-transparent hover:bg-white/5"
             }`}
           >
-            <Activity size={16} />
+            <Zap size={16} />
             <span className="text-xs font-semibold">Build</span>
           </Button>
+
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setActiveView("studio")}
-            className={`gap-2 h-10 px-4 rounded-xl transition-all duration-300 border ${
-              activeView === "studio"
-                ? "bg-purple-500/20 text-purple-200 border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.15)]"
+            onClick={() => setActiveView("evaluate")}
+            className={`gap-2 h-10 px-3.5 rounded-xl transition-all duration-300 border ${
+              activeView === "evaluate"
+                ? "bg-amber-500/20 text-amber-200 border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
                 : "text-gray-400 border-transparent hover:bg-white/5"
             }`}
           >
-            <Terminal size={16} />
-            <span className="text-xs font-semibold">Studio</span>
+            <BarChart2 size={16} />
+            <span className="text-xs font-semibold">Evaluation</span>
           </Button>
+
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setActiveView("chat")}
-            className={`gap-2 h-10 px-4 rounded-xl transition-all duration-300 border ${
+            className={`gap-2 h-10 px-3.5 rounded-xl transition-all duration-300 border ${
               activeView === "chat"
                 ? "bg-purple-500/20 text-purple-200 border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.15)]"
                 : "text-gray-400 border-transparent hover:bg-white/5"
@@ -116,18 +129,47 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
             <MessageSquare size={16} />
             <span className="text-xs font-semibold">Arena</span>
           </Button>
+
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setActiveView("creative")}
-            className={`gap-2 h-10 px-4 rounded-xl transition-all duration-300 border ${
+            className={`gap-2 h-10 px-3.5 rounded-xl transition-all duration-300 border ${
               activeView === "creative"
                 ? "bg-purple-500/20 text-purple-200 border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.15)]"
                 : "text-gray-400 border-transparent hover:bg-white/5"
             }`}
           >
             <Sparkles size={16} />
-            <span className="text-xs font-semibold">Image</span>
+            <span className="text-xs font-semibold">Diffusion</span>
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setActiveView("gguf")}
+            className={`gap-2 h-10 px-3.5 rounded-xl transition-all duration-300 border ${
+              activeView === "gguf"
+                ? "bg-amber-500/20 text-amber-200 border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
+                : "text-gray-400 border-transparent hover:bg-white/5"
+            }`}
+          >
+            <Box size={16} />
+            <span className="text-xs font-semibold">GGUF</span>
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setActiveView("onnx")}
+            className={`gap-2 h-10 px-3.5 rounded-xl transition-all duration-300 border ${
+              activeView === "onnx"
+                ? "bg-amber-500/20 text-amber-200 border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
+                : "text-gray-400 border-transparent hover:bg-white/5"
+            }`}
+          >
+            <Cpu size={16} />
+            <span className="text-xs font-semibold">ONNX</span>
           </Button>
         </div>
 

@@ -4,9 +4,11 @@ import { KnowledgeLibrary } from "./components/KnowledgeLibrary";
 import { ThinkingView } from "./components/ThinkingView";
 import { ChatView } from "./components/ChatView";
 import { CreativeStudio } from "./components/CreativeStudio";
-import { AppHeader } from "./components/AppHeader";
+import { AppHeader, TopLevelView } from "./components/AppHeader";
 import { WorkflowView } from "./components/WorkflowView";
-import { StudioView } from "./components/StudioView";
+import { QuantizationPanel } from "./components/QuantizationPanel";
+import { BenchmarkPanel } from "./components/BenchmarkPanel";
+import { OnnxPanel } from "./components/OnnxPanel";
 import { useNotebook } from "./hooks/useNotebook";
 import { useSkillsAndConnectors } from "./hooks/useSkillsAndConnectors";
 import { useDistillation } from "./hooks/useDistillation";
@@ -14,9 +16,7 @@ import { useWorkflows } from "./hooks/useWorkflows";
 import { fetchSystemSpecs } from "./utils/apiUtils";
 
 export default function App() {
-  const [activeView, setActiveView] = useState<
-    "studio" | "chat" | "workflow" | "knowledge" | "creative"
-  >("chat");
+  const [activeView, setActiveView] = useState<TopLevelView>("chat");
   const [chatSelectedModel, setChatSelectedModel] = useState<string>("");
   const [systemInfo, setSystemInfo] = useState<any>(null);
 
@@ -151,7 +151,7 @@ export default function App() {
             isGenerating={isGenerating}
             lastGeneratedImage={lastGeneratedImage}
           />
-        ) : activeView === "workflow" ? (
+        ) : activeView === "workflow" || activeView === "studio" ? (
           <WorkflowView
             workflowMode={workflowMode}
             setWorkflowMode={setWorkflowMode}
@@ -164,7 +164,7 @@ export default function App() {
             sftModelId={sftModelId}
             setSftModelId={setSftModelId}
             sftDatasetId={sftDatasetId}
-            setSftDatasetId={setSftDatasetId}
+            setDatasetId={setSftDatasetId}
             sftHardware={sftHardware}
             setHardware={setSftHardware}
             sftMaxSteps={sftMaxSteps}
@@ -172,13 +172,7 @@ export default function App() {
             sftRank={sftRank}
             setRank={setSftRank}
             onStartSFT={handleStartSFT}
-            onStartQuantization={handleStartQuantization}
-            onStartOnnx={handleStartOnnx}
             onNavigateToChat={handleOpenArena}
-            onNavigateToCreative={() => setActiveView("creative")}
-          />
-        ) : (
-          <StudioView
             cells={cells}
             activeCellId={activeCellId}
             isAutoRunning={isAutoRunning}
@@ -193,10 +187,58 @@ export default function App() {
             onMoveUpCell={(id) => moveCell(id, "up")}
             onMoveDownCell={(id) => moveCell(id, "down")}
             onTypeChangeCell={updateCellType}
-            onOpenArena={handleOpenArena}
             onDismissClarification={() => setClarification(null)}
           />
-        )}
+        ) : activeView === "gguf" ? (
+          <div className="flex-1 flex flex-col bg-[#0B090F] overflow-y-auto p-8 items-center space-y-8 w-full">
+            <div className="text-center space-y-2 max-w-2xl shrink-0">
+              <h2 className="text-3xl font-black text-white tracking-tighter uppercase">
+                GGUF Model Quantization
+              </h2>
+              <p className="text-sm text-white/40">Compress LLMs for fast local CPU & Edge execution.</p>
+            </div>
+            <div className="w-full max-w-3xl bg-[#140F1D] border border-white/5 rounded-[32px] p-8 shadow-2xl relative group shrink-0">
+              <div className="absolute top-0 right-0 p-12 bg-amber-500/5 blur-[120px] rounded-full group-hover:bg-amber-500/10 transition-colors duration-1000" />
+              <QuantizationPanel
+                onStart={handleStartQuantization}
+                isExecuting={isWorkflowExecuting}
+                deploymentUrl={deploymentUrl}
+                onTestInArena={(filename) => {
+                  handleOpenArena(filename || workflowModelFilename || undefined);
+                }}
+              />
+            </div>
+          </div>
+        ) : activeView === "evaluate" ? (
+          <div className="flex-1 flex flex-col bg-[#0B090F] overflow-y-auto p-8 items-center space-y-8 w-full">
+            <div className="text-center space-y-2 max-w-2xl shrink-0">
+              <h2 className="text-3xl font-black text-white tracking-tighter uppercase">
+                Model Evaluation & Benchmark
+              </h2>
+              <p className="text-sm text-white/40">Benchmark accuracy, perplexity, and reasoning capabilities.</p>
+            </div>
+            <div className="w-full max-w-4xl bg-[#140F1D] border border-white/5 rounded-[32px] p-8 shadow-2xl relative group shrink-0">
+              <div className="absolute top-0 right-0 p-12 bg-amber-500/5 blur-[120px] rounded-full group-hover:bg-amber-500/10 transition-colors duration-1000" />
+              <BenchmarkPanel systemInfo={systemInfo} />
+            </div>
+          </div>
+        ) : activeView === "onnx" ? (
+          <div className="flex-1 flex flex-col bg-[#0B090F] overflow-y-auto p-8 items-center space-y-8 w-full">
+            <div className="text-center space-y-2 max-w-2xl shrink-0">
+              <h2 className="text-3xl font-black text-white tracking-tighter uppercase">
+                ONNX Web & Edge Runtime Export
+              </h2>
+              <p className="text-sm text-white/40">Export adapters for in-browser ONNX Runtime inference.</p>
+            </div>
+            <div className="w-full max-w-3xl bg-[#140F1D] border border-white/5 rounded-[32px] p-8 shadow-2xl relative group shrink-0">
+              <div className="absolute top-0 right-0 p-12 bg-amber-500/5 blur-[120px] rounded-full group-hover:bg-amber-500/10 transition-colors duration-1000" />
+              <OnnxPanel
+                onStart={handleStartOnnx}
+                isExecuting={isWorkflowExecuting}
+              />
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <ManageSkillsPanel

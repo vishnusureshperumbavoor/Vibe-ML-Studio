@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Zap, Activity, Gauge, CheckCircle2, ExternalLink } from 'lucide-react';
+import React, { useEffect } from 'react';
+import { Zap, Activity, CheckCircle2, ExternalLink } from 'lucide-react';
 import { SmartSelector } from './SmartSelector';
-import { callKimi } from '../services/aiService';
 
 interface FineTuningPanelProps {
   onStart: (modelId: string, datasetId: string, hardware: string, maxSteps: number, rank: number) => void;
@@ -42,8 +41,6 @@ export const FineTuningPanel: React.FC<FineTuningPanelProps> = ({
   rank,
   setRank
 }) => {
-  const [forecast, setForecast] = useState<string | null>(null);
-  const [isForecasting, setIsForecasting] = useState(false);
 
   useEffect(() => {
     if (preSelectedDataset) {
@@ -53,47 +50,6 @@ export const FineTuningPanel: React.FC<FineTuningPanelProps> = ({
     }
   }, [preSelectedDataset]);
 
-  useEffect(() => {
-    if (modelId && datasetId) {
-      handleGetForecast();
-    } else {
-      setForecast(null);
-    }
-  }, [modelId, datasetId]);
-
-  const handleGetForecast = async () => {
-    setIsForecasting(true);
-    setForecast(null);
-    try {
-      // Extract original domain from dataset name (e.g., trenser_distilled_123 -> trenser)
-      const domain = datasetId.split('_distilled_')[0].replace(/_/g, ' ');
-
-      const prompt = [
-        { role: 'system', content: `You are a Senior ML Engineer at Vibe-ML Studio. Provide a predictive "Forecast" for this SFT run. 
-        
-        VML PLATFORM CONTEXT:
-        - We use LoRA (Low-Rank Adaptation) for all runs.
-        - Training is restricted to exactly 20 steps (max_steps=20) on a 500-sample dataset subset.
-        - Training a 0.5B model on a modern 8-16 core CPU takes roughly 5-15 minutes.
-        
-        CRITICAL FEASIBILITY CHECK:
-        1. Assess if the Model matches the Dataset. (Text vs Vision).
-        2. Assess Model size vs Hardware. Since we use LoRA and 20 steps, Qwen-0.5B on CPU is FULLY SUPPORTED and fast.
-        
-        If it IS compatible, provide exactly two paragraphs:
-        Paragraph 1: The narrative transformation (how this model will change after learning about "${domain}") and a HARDWARE-AWARE ESTIMATION (e.g. "Estimated Duration: ~8 mins on your CPU"). Explain how the selected Epochs and LoRA Rank will affect the depth of "${domain}" knowledge.
-        Paragraph 2: 3 specific, DOMAIN-RELEVANT prompts that a user would actually ask a model trained on ${domain} knowledge. Avoid generic AI prompts like "Climate Change" or "Fantasy" unless the dataset is actually about those.` },
-        { role: 'user', content: `Base Model: ${modelId}\nKnowledge Dataset: ${datasetId} (Domain: ${domain})\nHardware Target: ${hardware}\nMax Steps: ${maxSteps}\nLoRA Rank: ${rank}\nDetected System Specs: ${JSON.stringify(systemInfo)}` }
-      ];
-      const result = await callKimi(prompt);
-      setForecast(result);
-    } catch (e) {
-      console.error("Forecast failed:", e);
-    } finally {
-      setIsForecasting(false);
-    }
-  };
-
   const RECOMMENDED_MODELS = [
     { id: 'Qwen/Qwen2-0.5B', downloads: 1250000, likes: 4500, is_cpu_ready: true },
     { id: 'HuggingFaceTB/SmolLM-135M', downloads: 850000, likes: 2200, is_cpu_ready: true },
@@ -101,6 +57,7 @@ export const FineTuningPanel: React.FC<FineTuningPanelProps> = ({
   ];
 
   const RECOMMENDED_DATASETS = [
+    { id: 'lavita/MedQuAD', downloads: 85000, likes: 320 },
     { id: 'tatsu-lab/alpaca', downloads: 450000, likes: 1200 },
     { id: 'yahma/alpaca-cleaned', downloads: 220000, likes: 850 },
     { id: 'HuggingFaceH4/instruction-dataset', downloads: 150000, likes: 600 },
@@ -174,7 +131,7 @@ export const FineTuningPanel: React.FC<FineTuningPanelProps> = ({
             defaultValue={modelId}
             suggestions={RECOMMENDED_MODELS}
           />
-          <p className="text-[10px] text-white/30 px-1">Tip: Tiny models like Qwen-0.5B are best for CPU.</p>
+          <p className="text-[10px] text-white/30 px-1">Tip: Qwen-0.5B is optimized for fast CPU fine-tuning on 32GB RAM.</p>
         </div>
 
         <div className="space-y-2">
@@ -186,7 +143,7 @@ export const FineTuningPanel: React.FC<FineTuningPanelProps> = ({
             defaultValue={datasetId}
             suggestions={RECOMMENDED_DATASETS}
           />
-          <p className="text-[10px] text-white/30 px-1">Try: 'yahma/alpaca-cleaned' for general instructions.</p>
+          <p className="text-[10px] text-white/30 px-1">Try: 'lavita/MedQuAD' for medical QA or 'yahma/alpaca-cleaned' for general tasks.</p>
         </div>
       </div>
 
@@ -271,41 +228,6 @@ export const FineTuningPanel: React.FC<FineTuningPanelProps> = ({
           ))}
         </div>
       </div>
-
-      {(isForecasting || forecast) && (
-        <div className={`relative group animate-in zoom-in-95 fade-in duration-500`}>
-          <div className={`absolute -inset-0.5 rounded-[28px] blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200
-            ${forecast?.startsWith('⚠️') ? 'bg-red-500/40' : 'bg-gradient-to-r from-amber-500/20 to-purple-600/20'}
-          `}></div>
-          <div className={`relative p-6 rounded-[24px] border space-y-4
-            ${forecast?.startsWith('⚠️') ? 'bg-[#150505] border-red-500/30' : 'bg-[#1A1621] border-white/10'}
-          `}>
-            <div className="flex items-center justify-between">
-              <div className={`flex items-center gap-2 ${forecast?.startsWith('⚠️') ? 'text-red-400' : 'text-amber-400'}`}>
-                <Gauge size={14} className={isForecasting ? "animate-spin" : ""} />
-                <span className="text-[10px] font-black uppercase tracking-widest">
-                  {forecast?.startsWith('⚠️') ? 'Safety & Compatibility Alert' : 'VML Training Forecast'}
-                </span>
-              </div>
-              {isForecasting && <span className="text-[8px] text-white/20 animate-pulse italic">Validating Architecture...</span>}
-            </div>
-            
-            {isForecasting ? (
-              <div className="space-y-2 py-2">
-                <div className="h-2 w-3/4 bg-white/5 rounded-full animate-pulse" />
-                <div className="h-2 w-1/2 bg-white/5 rounded-full animate-pulse" />
-                <div className="h-2 w-2/3 bg-white/5 rounded-full animate-pulse" />
-              </div>
-            ) : (
-              <div className={`text-[11px] leading-relaxed font-medium whitespace-pre-line prose prose-invert
-                ${forecast?.startsWith('⚠️') ? 'text-red-200' : 'text-white/70'}
-              `}>
-                {forecast}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       <button
         disabled={!modelId || !datasetId || isExecuting}
