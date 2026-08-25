@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { CellData, ExecutionMode } from "../types";
 import { executeCode, fixCodeError } from "../services/aiService";
@@ -6,6 +6,15 @@ import { generateOnnxExportScript } from "../services/workflowService";
 import { API_BASE } from "../constants";
 
 import { TopLevelView } from "../components/AppHeader";
+
+export interface TrainingProgress {
+  currentStep: number;
+  totalSteps: number;
+  loss?: number;
+  percentage: number;
+  modelName: string;
+  isCompleted?: boolean;
+}
 
 interface UseWorkflowsProps {
   setCells: React.Dispatch<React.SetStateAction<CellData[]>>;
@@ -23,7 +32,11 @@ export function useWorkflows({
   mode,
 }: UseWorkflowsProps) {
   const [workflowMode, setWorkflowMode] = useState<"finetune" | "studio">("finetune");
-  const [isWorkflowExecuting, setIsWorkflowExecuting] = useState(false);
+  const [isSftExecuting, setIsSftExecuting] = useState(false);
+  const [isQuantizing, setIsQuantizing] = useState(false);
+  const [isOnnxExecuting, setIsOnnxExecuting] = useState(false);
+  const isWorkflowExecuting = isSftExecuting || isQuantizing || isOnnxExecuting;
+  const [trainingProgress, setTrainingProgress] = useState<TrainingProgress | null>(null);
   const [deploymentUrl, setDeploymentUrl] = useState<string | null>(null);
   const [workflowModelFilename, setWorkflowModelFilename] = useState<string | null>(null);
   const [lastGeneratedImage, setLastGeneratedImage] = useState<string | undefined>(undefined);
@@ -34,11 +47,35 @@ export function useWorkflows({
     startTime: number;
   } | null>(null);
 
+  // Screen Wake Lock: prevents OS sleep and browser throttling while training is executing
+  useEffect(() => {
+    let wakeLockSentinel: any = null;
+    const requestLock = async () => {
+      if ("wakeLock" in navigator && isWorkflowExecuting) {
+        try {
+          wakeLockSentinel = await (navigator as any).wakeLock.request("screen");
+        } catch (e) {
+          console.warn("Screen Wake Lock could not be acquired:", e);
+        }
+      }
+    };
+
+    if (isWorkflowExecuting) {
+      requestLock();
+    }
+
+    return () => {
+      if (wakeLockSentinel) {
+        wakeLockSentinel.release().catch(() => {});
+      }
+    };
+  }, [isWorkflowExecuting]);
+
   // SFT persistent state (Optimized for CPU & 32GB RAM)
   const [sftModelId, setSftModelId] = useState("Qwen/Qwen2-0.5B");
   const [sftDatasetId, setSftDatasetId] = useState("lavita/MedQuAD");
   const [sftHardware, setSftHardware] = useState("CPU");
-  const [sftMaxSteps, setSftMaxSteps] = useState(50);
+  const [sftMaxSteps, setSftMaxSteps] = useState(20);
   const [sftRank, setSftRank] = useState(16);
 
   const handleStartDeployment = async (
@@ -105,9 +142,17 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
     maxSteps: number,
     rank: number
   ) => {
-    setIsWorkflowExecuting(true);
+    setIsSftExecuting(true);
     setDeploymentUrl(null);
     setWorkflowModelFilename(null);
+    const cleanModelName = modelId.split("/").pop() || modelId;
+    setTrainingProgress({
+      currentStep: 0,
+      totalSteps: maxSteps,
+      percentage: 0,
+      modelName: cleanModelName,
+      isCompleted: false,
+    });
     setActiveTrainingSession({
       modelId,
       datasetId,
@@ -179,6 +224,24 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
         const result = await executeCode(
           blockScript,
           (partial) => {
+            // Extract loss or step from text output stream if available
+            const stepMatch = partial.match(/'step':\s*(\d+)/) || partial.match(/Step\s*(\d+)\/(\d+)/i);
+            const lossMatch = partial.match(/'loss':\s*([\d.]+)/) || partial.match(/loss:\s*([\d.]+)/i);
+            if (stepMatch || lossMatch) {
+              setTrainingProgress((prev) => {
+                if (!prev) return prev;
+                const step = stepMatch ? parseInt(stepMatch[1]) : prev.currentStep;
+                const total = prev.totalSteps;
+                const loss = lossMatch ? parseFloat(parseFloat(lossMatch[1]).toFixed(4)) : prev.loss;
+                const pct = Math.min(100, Math.round((step / total) * 100));
+                return {
+                  ...prev,
+                  currentStep: step,
+                  loss: loss !== undefined ? loss : prev.loss,
+                  percentage: pct,
+                };
+              });
+            }
             setCells((prev) =>
               prev.map((c) =>
                 c.id === cellId ? { ...c, output: partial } : c
@@ -186,6 +249,20 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
             );
           },
           (plotPoint) => {
+            const total = plotPoint.vml_total_steps || maxSteps || 20;
+            const step = plotPoint.step ?? 0;
+            const pct = Math.min(100, Math.round((step / total) * 100));
+            const lossVal = typeof plotPoint.loss === "number" ? Number(plotPoint.loss.toFixed(4)) : undefined;
+
+            setTrainingProgress({
+              currentStep: step,
+              totalSteps: total,
+              loss: lossVal,
+              percentage: pct,
+              modelName: cleanModelName,
+              isCompleted: false,
+            });
+
             if (!plotPoint.vml_total_steps) {
               const match = blockScript.match(/max_steps=(\d+)/);
               if (match) plotPoint.vml_total_steps = parseInt(match[1]);
@@ -309,20 +386,23 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
             }
           }
 
-          if (!recoverySuccess) break;
         } else if (result.error) {
           break;
         }
       }
+
+      setTrainingProgress((prev) =>
+        prev ? { ...prev, currentStep: prev.totalSteps, percentage: 100, isCompleted: true } : null
+      );
     } catch (e) {
       console.error("SFT Failed:", e);
     } finally {
-      setIsWorkflowExecuting(false);
+      setIsSftExecuting(false);
     }
   };
 
   const handleStartQuantization = async (modelId: string, bits: string) => {
-    setIsWorkflowExecuting(true);
+    setIsQuantizing(true);
     setDeploymentUrl(null);
     setWorkflowModelFilename(null);
     try {
@@ -423,12 +503,12 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
     } catch (e) {
       console.error("Quantization Workflow Failed:", e);
     } finally {
-      setIsWorkflowExecuting(false);
+      setIsQuantizing(false);
     }
   };
 
   const handleStartOnnx = async (adapterSlug: string, precision: string) => {
-    setIsWorkflowExecuting(true);
+    setIsOnnxExecuting(true);
     setWorkflowMode("studio");
     setActiveView("workflow");
 
@@ -473,7 +553,7 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
       )
     );
 
-    setIsWorkflowExecuting(false);
+    setIsOnnxExecuting(false);
   };
 
   const handleStartGeneration = async (params: {
@@ -513,6 +593,11 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
     workflowMode,
     setWorkflowMode,
     isWorkflowExecuting,
+    isSftExecuting,
+    isQuantizing,
+    isOnnxExecuting,
+    trainingProgress,
+    setTrainingProgress,
     deploymentUrl,
     workflowModelFilename,
     lastGeneratedImage,

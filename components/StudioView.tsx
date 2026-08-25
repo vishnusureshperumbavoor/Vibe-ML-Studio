@@ -53,7 +53,6 @@ export const StudioView: React.FC<StudioViewProps> = ({
   onOpenArena,
   onDismissClarification,
 }) => {
-  const [wasCopyAllClicked, setWasCopyAllClicked] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -62,39 +61,10 @@ export const StudioView: React.FC<StudioViewProps> = ({
     }
   }, [cells.length, isGenerating, activeCellId]);
 
-  const handleCopyAll = () => {
-    const context = formatNotebookContext(cells, thinkingHistory);
-    navigator.clipboard.writeText(context);
-    setWasCopyAllClicked(true);
-    setTimeout(() => setWasCopyAllClicked(false), 2000);
-  };
-
   return (
     <>
-      <main className="flex-1 overflow-y-auto overflow-x-hidden pb-40 px-4 md:px-8 transition-all duration-500">
+      <main className="flex-1 overflow-y-auto overflow-x-hidden pb-40 px-4 md:px-8 transition-all duration-500 pt-2">
         <div className="max-w-5xl mx-auto space-y-6">
-          <div className="sticky top-0 z-30 flex justify-end pb-4 -mx-4 px-4 md:-mx-8 md:px-8 bg-gradient-to-b from-[#0B090F] via-[#0B090F] to-transparent pt-4 -mt-4 pointer-events-none">
-            <button
-              onClick={handleCopyAll}
-              className={`flex items-center gap-2 px-4 py-2 rounded-2xl border transition-all duration-300 pointer-events-auto shadow-2xl backdrop-blur-md ${
-                wasCopyAllClicked
-                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-emerald-500/10"
-                  : "bg-[#140F1D]/80 border-white/10 text-white/40 hover:bg-[#140F1D] hover:border-white/20 hover:text-white"
-              }`}
-            >
-              {wasCopyAllClicked ? (
-                <CheckCircle2 size={14} />
-              ) : (
-                <Copy size={14} />
-              )}
-              <span className="text-[10px] font-black tracking-widest uppercase">
-                {wasCopyAllClicked
-                  ? "COPIED TO CLIPBOARD"
-                  : "COPY NOTEBOOK CONTEXT"}
-              </span>
-            </button>
-          </div>
-
           {/* Active Training Session Header */}
           {activeTrainingSession && (
             <div className="mb-10 animate-in fade-in slide-in-from-top-4 duration-700">

@@ -1,8 +1,10 @@
-import React from "react";
+import React, { useState } from "react";
+import { Copy, CheckCircle2 } from "lucide-react";
 import { WorkFlowSwitcher } from "./WorkFlowSwitcher";
 import { FineTuningPanel } from "./FineTuningPanel";
 import { StudioView } from "./StudioView";
 import { CellData, CellType } from "../types";
+import { formatNotebookContext } from "../utils/notebookUtils";
 
 interface WorkflowViewProps {
   workflowMode: "finetune" | "studio";
@@ -93,19 +95,46 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
   onTypeChangeCell,
   onDismissClarification,
 }) => {
+  const [wasCopyAllClicked, setWasCopyAllClicked] = useState(false);
+
+  const handleCopyNotebook = () => {
+    const context = formatNotebookContext(cells, thinkingHistory);
+    navigator.clipboard.writeText(context);
+    setWasCopyAllClicked(true);
+    setTimeout(() => setWasCopyAllClicked(false), 2000);
+  };
+
   return (
     <div className="flex-1 flex flex-col bg-[#0B090F] overflow-y-auto p-6 items-center space-y-8 w-full">
-      <div className="text-center space-y-2 max-w-2xl shrink-0">
-        <h2 className="text-3xl font-black text-white tracking-tighter uppercase">
-          Model Production Center
-        </h2>
-        <p className="text-sm text-white/40">Fine-Tune & Train your Expert LLMs.</p>
-      </div>
+      <div className="w-full max-w-5xl flex items-center justify-between gap-4 shrink-0 px-2">
+        <div className="w-36 hidden sm:block" />
 
-      <WorkFlowSwitcher
-        active={workflowMode}
-        onChange={setWorkflowMode}
-      />
+        <WorkFlowSwitcher
+          active={workflowMode}
+          onChange={setWorkflowMode}
+        />
+
+        <div className="flex justify-end">
+          <button
+            onClick={handleCopyNotebook}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border transition-all duration-300 shadow-lg backdrop-blur-md cursor-pointer ${
+              wasCopyAllClicked
+                ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400 shadow-emerald-500/10"
+                : "bg-[#140F1D] border-white/10 text-white/60 hover:bg-white/5 hover:border-white/20 hover:text-white"
+            }`}
+            title="Copy entire notebook context & logs"
+          >
+            {wasCopyAllClicked ? (
+              <CheckCircle2 size={14} className="text-emerald-400" />
+            ) : (
+              <Copy size={14} />
+            )}
+            <span className="text-[11px] font-bold tracking-wider uppercase">
+              {wasCopyAllClicked ? "COPIED TO CLIPBOARD" : "COPY NOTEBOOK"}
+            </span>
+          </button>
+        </div>
+      </div>
 
       {workflowMode === "finetune" ? (
         <div className="w-full max-w-4xl bg-[#140F1D] border border-white/5 rounded-[32px] p-8 shadow-2xl relative group shrink-0">

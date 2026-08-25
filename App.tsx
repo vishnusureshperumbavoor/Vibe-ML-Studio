@@ -74,6 +74,10 @@ export default function App() {
     workflowMode,
     setWorkflowMode,
     isWorkflowExecuting,
+    isSftExecuting,
+    isQuantizing,
+    isOnnxExecuting,
+    trainingProgress,
     deploymentUrl,
     workflowModelFilename,
     lastGeneratedImage,
@@ -125,6 +129,11 @@ export default function App() {
         setActiveView={setActiveView}
         isAutoRunning={isAutoRunning}
         onStopAutoPilot={handleStop}
+        trainingProgress={trainingProgress}
+        onViewTraining={() => {
+          setActiveView("workflow");
+          setWorkflowMode("studio");
+        }}
       />
 
       {/* Main Content Area */}
@@ -155,7 +164,7 @@ export default function App() {
           <WorkflowView
             workflowMode={workflowMode}
             setWorkflowMode={setWorkflowMode}
-            isWorkflowExecuting={isWorkflowExecuting}
+            isWorkflowExecuting={isSftExecuting}
             systemInfo={systemInfo}
             preSelectedDataset={preSelectedDataset}
             onClearSelection={() => setPreSelectedDataset(null)}
@@ -201,7 +210,7 @@ export default function App() {
               <div className="absolute top-0 right-0 p-12 bg-amber-500/5 blur-[120px] rounded-full group-hover:bg-amber-500/10 transition-colors duration-1000" />
               <QuantizationPanel
                 onStart={handleStartQuantization}
-                isExecuting={isWorkflowExecuting}
+                isExecuting={isQuantizing}
                 deploymentUrl={deploymentUrl}
                 onTestInArena={(filename) => {
                   handleOpenArena(filename || workflowModelFilename || undefined);
@@ -234,7 +243,7 @@ export default function App() {
               <div className="absolute top-0 right-0 p-12 bg-amber-500/5 blur-[120px] rounded-full group-hover:bg-amber-500/10 transition-colors duration-1000" />
               <OnnxPanel
                 onStart={handleStartOnnx}
-                isExecuting={isWorkflowExecuting}
+                isExecuting={isOnnxExecuting}
               />
             </div>
           </div>
