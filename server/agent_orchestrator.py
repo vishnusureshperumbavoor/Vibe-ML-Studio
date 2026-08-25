@@ -262,6 +262,15 @@ base_models_dir = os.path.join(base_path, "models", "base_models")
 os.makedirs(base_models_dir, exist_ok=True)
 
 print(f"Initializing VML SFT Pipeline: {{model_id}} on {{dataset_id}} ({{device}})")
+
+# Notify Telegram on Training Start
+import sys
+sys.path.append(base_path)
+try:
+    from telegram_notifier import telegram_notifier
+    telegram_notifier.send_start(model_id, dataset_id, max_steps, hardware)
+except Exception:
+    pass
 """,
             f"""# Block 2: Model and Tokenizer Loading
 from huggingface_hub import snapshot_download
@@ -343,6 +352,18 @@ class VMLReportingCallback(transformers.TrainerCallback):
             logs["vml_epoch"] = state.epoch
             logs["vml_total_steps"] = state.max_steps
             print(f"[VML_DATA] {{json.dumps(logs)}}")
+            try:
+                from telegram_notifier import telegram_notifier
+                loss = logs.get("loss") or logs.get("train_loss")
+                telegram_notifier.update_progress(
+                    step=state.global_step,
+                    total_steps=state.max_steps,
+                    loss=loss,
+                    epoch=state.epoch,
+                    model_name="{model_slug}"
+                )
+            except Exception:
+                pass
 
 # Resolve output path dynamically
 cwd = os.getcwd()
@@ -382,6 +403,12 @@ trainer.train()
 print(f"Saving fine-tuned adapters to {{output_dir}}...")
 trainer.save_model(output_dir)
 print("✅ Local weights stored successfully.")
+try:
+    from telegram_notifier import telegram_notifier
+    final_loss = trainer.state.log_history[-1].get("loss") if trainer.state.log_history else None
+    telegram_notifier.send_completion("{model_slug}", final_loss)
+except Exception:
+    pass
 """,
             f"""# Block 5.1: GGUF Engine Provisioning
 vml_script_path = os.path.join(output_dir, "vml_converter_engine.py")

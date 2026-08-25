@@ -221,9 +221,30 @@ async def interrupt_execution():
     """
     try:
         await kernel_manager.interrupt()
+        try:
+            from telegram_notifier import telegram_notifier
+            telegram_notifier.send_interrupted(0, 0)
+        except Exception:
+            pass
         return {"status": "success", "message": "Kernel process interrupted."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/telegram/status")
+async def get_telegram_status():
+    """
+    Returns Telegram Bot connection status and detected chat ID.
+    """
+    try:
+        from telegram_notifier import telegram_notifier
+        chat_id = telegram_notifier._resolve_chat_id()
+        return {
+            "configured": telegram_notifier.enabled,
+            "has_token": bool(telegram_notifier.bot_token and telegram_notifier.bot_token != "your_telegram_token_here"),
+            "chat_id": chat_id or "Not detected yet (send /start to your bot in Telegram)"
+        }
+    except Exception as e:
+        return {"configured": False, "error": str(e)}
 
 @app.post("/read_file")
 async def read_file(req: FileReadRequest):
