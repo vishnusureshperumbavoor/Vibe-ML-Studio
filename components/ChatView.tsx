@@ -653,51 +653,62 @@ ${assistantMsg.content}`;
               if (data.done) break;
               if (data.error) {
                 setMsg((prev) => {
-                  const updated = [...prev];
-                  const last = updated[updated.length - 1];
-                  if (last && last.role === "assistant") {
-                    last.content = `Error: ${data.error}`;
-                  }
-                  return updated;
+                  if (prev.length === 0) return prev;
+                  const last = prev[prev.length - 1];
+                  if (!last || last.role !== "assistant") return prev;
+                  return [
+                    ...prev.slice(0, -1),
+                    { ...last, content: `Error: ${data.error}` },
+                  ];
                 });
                 break;
               }
 
               if (data.content !== undefined) {
                 setMsg((prev) => {
-                  const updated = [...prev];
-                  const last = updated[updated.length - 1];
-                  if (last && last.role === "assistant") {
-                    const raw = data.content;
+                  if (prev.length === 0) return prev;
+                  const last = prev[prev.length - 1];
+                  if (!last || last.role !== "assistant") return prev;
 
-                    if (raw.includes("<think>")) {
-                      const thinkParts = raw.split("<think>");
-                      if (thinkParts[1]) {
-                        const innerParts = thinkParts[1].split("</think>");
-                        last.reasoning = (last.reasoning || "") + innerParts[0];
-                        if (innerParts[1]) {
-                          last.content += innerParts[1];
-                        }
-                      }
-                    } else if (raw.includes("</think>")) {
-                      const thinkParts = raw.split("</think>");
-                      last.reasoning =
-                        (last.reasoning || "") + thinkParts[0];
-                      if (thinkParts[1]) {
-                        last.content += thinkParts[1];
-                      }
-                    } else {
-                      last.content += raw;
-                    }
+                  const raw = data.content;
+                  let newReasoning = last.reasoning || "";
+                  let newContent = last.content || "";
 
-                    if (data.ttft || data.tps) {
-                      last.stats = {
-                        ttft: data.ttft || last.stats?.ttft || 0,
-                        tps: data.tps || last.stats?.tps || 0,
-                      };
+                  if (raw.includes("<think>")) {
+                    const thinkParts = raw.split("<think>");
+                    if (thinkParts[1]) {
+                      const innerParts = thinkParts[1].split("</think>");
+                      newReasoning += innerParts[0];
+                      if (innerParts[1]) {
+                        newContent += innerParts[1];
+                      }
                     }
+                  } else if (raw.includes("</think>")) {
+                    const thinkParts = raw.split("</think>");
+                    newReasoning += thinkParts[0];
+                    if (thinkParts[1]) {
+                      newContent += thinkParts[1];
+                    }
+                  } else {
+                    newContent += raw;
                   }
-                  return updated;
+
+                  const newStats =
+                    data.ttft || data.tps
+                      ? {
+                          ttft: data.ttft || last.stats?.ttft || 0,
+                          tps: data.tps || last.stats?.tps || 0,
+                        }
+                      : last.stats;
+
+                  const updatedLast: Message = {
+                    ...last,
+                    content: newContent,
+                    reasoning: newReasoning,
+                    stats: newStats,
+                  };
+
+                  return [...prev.slice(0, -1), updatedLast];
                 });
               }
             } catch (err) {
@@ -709,12 +720,13 @@ ${assistantMsg.content}`;
     } catch (e: any) {
       if (e.name !== "AbortError") {
         setMsg((prev) => {
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last && last.role === "assistant") {
-            last.content = `Failed to generate response: ${e.message}`;
-          }
-          return updated;
+          if (prev.length === 0) return prev;
+          const last = prev[prev.length - 1];
+          if (!last || last.role !== "assistant") return prev;
+          return [
+            ...prev.slice(0, -1),
+            { ...last, content: `Failed to generate response: ${e.message}` },
+          ];
         });
       }
     } finally {
