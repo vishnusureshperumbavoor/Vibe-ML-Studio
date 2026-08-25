@@ -5,7 +5,7 @@ interface BenchmarkPanelProps {
   systemInfo?: any;
 }
 
-export const BenchmarkPanel: React.FC<BenchmarkPanelProps> = ({ systemInfo }) => {
+export const BenchmarkPanel: React.FC<BenchmarkPanelProps> = ({ systemInfo: _systemInfo }) => {
   const [dataset, setDataset] = useState('gsm8k');
   const [modelId, setModelId] = useState('');
   const [loraSlug, setLoraSlug] = useState('');

@@ -5,7 +5,7 @@ import { ExecutionMode } from '../../types';
 
 export const getSystemPrompt = (mode: ExecutionMode, userPrompt: string = '') => {
     const isMedicalRequest = /pneumonia|chest|nih|lung|monai|medical|segmentation|mri|ct|spleen|decathlon/i.test(userPrompt);
-    const activeDomainPrompt = (mode === 'vibe-med' || isMedicalRequest) ? VIBE_MED_PROMPT : 
+    const activeDomainPrompt = isMedicalRequest ? VIBE_MED_PROMPT : 
                                (mode === 'plan' ? PLAN_PROMPT : AGENT_PROMPT);
     const basePrompt = `
 You are an expert Machine Learning Engineer at VibeML Agent Studio. 

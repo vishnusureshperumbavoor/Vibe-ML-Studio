@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   Search,
   ChevronDown,
-  Check,
   Loader2,
   Cpu,
   Lock,
@@ -11,7 +10,7 @@ import {
   Database,
 } from "lucide-react";
 
-interface ModelResult {
+export interface ModelResult {
   id: string;
   downloads: number;
   likes: number;

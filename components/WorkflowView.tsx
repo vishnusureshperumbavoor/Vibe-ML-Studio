@@ -65,7 +65,7 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
   preSelectedDataset,
   onClearSelection,
   deploymentUrl,
-  workflowModelFilename,
+  workflowModelFilename: _workflowModelFilename,
   sftModelId,
   setSftModelId,
   sftDatasetId,

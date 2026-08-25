@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, Play, AlertCircle, Info } from 'lucide-react';
+import { Box, Info } from 'lucide-react';
 import { SmartSelector } from './SmartSelector';
 
 interface QuantizationPanelProps {
@@ -12,8 +12,8 @@ interface QuantizationPanelProps {
 export const QuantizationPanel: React.FC<QuantizationPanelProps> = ({
   onStart,
   isExecuting,
-  deploymentUrl,
-  onTestInArena
+  deploymentUrl: _deploymentUrl,
+  onTestInArena: _onTestInArena
 }) => {
   const [modelId, setModelId] = useState('');
   const [bits, setBits] = useState('4');

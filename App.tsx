@@ -1,8 +1,7 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import ManageSkillsPanel from "./components/ManageSkillsPanel";
 import { KnowledgeLibrary } from "./components/KnowledgeLibrary";
 import { ThinkingView } from "./components/ThinkingView";
-import { ChatView } from "./components/ChatView";
 import { CreativeStudio } from "./components/CreativeStudio";
 import { AppHeader, TopLevelView } from "./components/AppHeader";
 import { WorkflowView } from "./components/WorkflowView";
@@ -74,7 +73,6 @@ export default function App() {
   const {
     workflowMode,
     setWorkflowMode,
-    isWorkflowExecuting,
     isSftExecuting,
     isQuantizing,
     isOnnxExecuting,
@@ -177,13 +175,13 @@ export default function App() {
             sftModelId={sftModelId}
             setSftModelId={setSftModelId}
             sftDatasetId={sftDatasetId}
-            setDatasetId={setSftDatasetId}
+            setSftDatasetId={setSftDatasetId}
             sftHardware={sftHardware}
-            setHardware={setSftHardware}
+            setSftHardware={setSftHardware}
             sftMaxSteps={sftMaxSteps}
-            setMaxSteps={setSftMaxSteps}
+            setSftMaxSteps={setSftMaxSteps}
             sftRank={sftRank}
-            setRank={setSftRank}
+            setSftRank={setSftRank}
             onStartSFT={handleStartSFT}
             onNavigateToChat={handleOpenChat}
             cells={cells}

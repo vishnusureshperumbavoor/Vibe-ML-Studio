@@ -386,6 +386,9 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
             }
           }
 
+          if (!recoverySuccess) {
+            break;
+          }
         } else if (result.error) {
           break;
         }

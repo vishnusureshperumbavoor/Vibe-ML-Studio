@@ -1,4 +1,3 @@
-const b = '`';
 export const VIBE_MED_PROMPT = `
 INSTRUCTIONS FOR VIBE-MED MODE (MEDICAL AI + SOTA):
 - Focus on building high-performance Medical Imaging SOTA models.

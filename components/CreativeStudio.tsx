@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Sparkles, Wand2, Play, Image as ImageIcon, Upload, RefreshCw, Download, CheckCircle2, Loader2, AlertCircle, HardDrive } from 'lucide-react';
+import { Wand2, Play, Image as ImageIcon, Upload, RefreshCw, Download, Loader2, HardDrive } from 'lucide-react';
 import { RenderedImage } from './RenderedImage';
 
 interface CreativeStudioProps {
@@ -11,8 +11,8 @@ interface CreativeStudioProps {
 export const CreativeStudio: React.FC<CreativeStudioProps> = ({ onGenerate, isGenerating, lastGeneratedImage }) => {
   const [mode, setMode] = useState<'text2img' | 'img2img'>('text2img');
   const [prompt, setPrompt] = useState('');
-  const [strength, setStrength] = useState(0.6);
-  const [guidanceScale, setGuidanceScale] = useState(7.5);
+  const strength = 0.6;
+  const guidanceScale = 7.5;
   const [baseImage, setBaseImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);

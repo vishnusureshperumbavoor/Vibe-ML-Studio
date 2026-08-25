@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Cpu, Play, Box, Info, Database } from 'lucide-react';
+import { Cpu, Info, Database } from 'lucide-react';
 
 interface OnnxPanelProps {
   onStart: (adapterSlug: string, precision: string) => void;

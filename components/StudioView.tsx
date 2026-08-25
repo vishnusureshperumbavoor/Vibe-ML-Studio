@@ -1,15 +1,12 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useRef, useEffect } from "react";
 import {
   Rocket,
   Zap,
   Database,
   Sparkles,
-  CheckCircle2,
-  Copy,
 } from "lucide-react";
 import { Cell } from "./Cell";
 import { CellData, CellType } from "../types";
-import { formatNotebookContext } from "../utils/notebookUtils";
 
 interface StudioViewProps {
   cells: CellData[];
@@ -42,7 +39,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
   isGenerating,
   clarification,
   activeTrainingSession,
-  thinkingHistory,
+  thinkingHistory: _thinkingHistory,
   onFocusCell,
   onChangeCell,
   onRunCell,

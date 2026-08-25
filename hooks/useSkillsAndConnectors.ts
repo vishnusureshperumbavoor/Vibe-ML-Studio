@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ConnectorConfig, SkillInfo, PluginDefinition } from "../types";
+import { ConnectorConfig, SkillInfo } from "../types";
 import { API_BASE, INITIAL_CONNECTORS, CONNECTOR_PLUGINS } from "../constants";
 
 export function useSkillsAndConnectors() {

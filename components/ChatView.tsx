@@ -13,22 +13,13 @@ import {
   Maximize2,
   Activity,
   Clock,
-  Zap,
-  Search,
-  X,
-  Database,
-  FileText,
-  Plus,
   CheckCircle2,
   Copy,
   CloudDownload,
-  DownloadCloud,
-  CheckCircle,
   Cpu,
 } from "lucide-react";
 import { onnxService } from "../services/onnxInferenceService";
 import { Button } from "./Button";
-import { RenderedImage } from "./RenderedImage";
 import { useEffect, useRef, useState } from "react";
 
 interface Message {
@@ -426,6 +417,10 @@ ${assistantMsg.content}`;
   const [isSendingB, setIsSendingB] = useState(false);
   const isSending = isSendingA || isSendingB;
 
+  const [onnxStatus, setOnnxStatus] = useState<
+    Record<string, { status: "idle" | "downloading" | "ready"; progress: number }>
+  >({});
+
   const scrollA = useRef<HTMLDivElement>(null);
   const scrollB = useRef<HTMLDivElement>(null);
   const nearBottomA = useRef(true);
@@ -479,6 +474,19 @@ ${assistantMsg.content}`;
     if (nearBottomB.current && scrollB.current)
       scrollB.current.scrollTop = scrollB.current.scrollHeight;
   }, [messagesB]);
+
+  const handleStop = () => {
+    if (abortA.current) {
+      abortA.current.abort();
+      abortA.current = null;
+    }
+    if (abortB.current) {
+      abortB.current.abort();
+      abortB.current = null;
+    }
+    setIsSendingA(false);
+    setIsSendingB(false);
+  };
 
   const fetchStream = async (
     modelName: string,
@@ -631,6 +639,7 @@ ${assistantMsg.content}`;
 
     setInput("");
 
+    const modelA = allModels.find((m) => m.name === selectedModel);
     const modelB = selectedModel2
       ? allModels.find((m) => m.name === selectedModel2)
       : null;

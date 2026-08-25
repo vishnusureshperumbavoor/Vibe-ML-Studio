@@ -188,7 +188,7 @@ export const VisionPanel: React.FC<VisionPanelProps> = ({ onNavigateToCreative }
           {status === 'ready' && (
             <button
               onClick={handleDownload}
-              disabled={status === 'downloading'}
+              disabled={isStartingDownload}
               className="text-xs text-white/40 hover:text-white/80 transition-colors flex items-center gap-1.5 px-4 py-2"
             >
               <RefreshCw size={12} /> Force Re-download

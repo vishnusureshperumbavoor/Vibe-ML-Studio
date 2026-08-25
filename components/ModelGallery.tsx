@@ -7,14 +7,9 @@ import {
   MessageSquare,
   Search,
   ArrowLeft,
-  Calendar,
   HardDrive,
-  Layers,
-  Database,
   CheckCircle2,
   RefreshCw,
-  Sliders,
-  ChevronRight,
   Trash2,
   AlertTriangle,
 } from "lucide-react";
@@ -349,7 +344,6 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
             {filteredModels.map((model, idx) => {
               const isLoRA = model.type === "adapter";
               const isBase = model.type === "base";
-              const isONNX = model.type === "onnx";
 
               return (
                 <div

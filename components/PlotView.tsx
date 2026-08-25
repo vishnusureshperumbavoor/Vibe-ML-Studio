@@ -10,7 +10,7 @@ import {
   AreaChart,
   Area
 } from 'recharts';
-import { Activity, Zap, Target, Gauge, Clock, ChevronRight, Loader2, CheckCircle2, Cpu } from 'lucide-react';
+import { Activity, Zap, Target, Gauge, Clock, Cpu } from 'lucide-react';
 
 interface PlotPoint {
   vml_step: number;
@@ -27,11 +27,8 @@ interface PlotViewProps {
   metadata?: Record<string, any>;
 }
 
-export const PlotView: React.FC<PlotViewProps> = ({ data, onOpenArena, metadata }) => {
-  const [deployState, setDeployState] = React.useState<'idle' | 'deploying' | 'ready' | 'error'>('idle');
-  const [deployMessage, setDeployMessage] = React.useState('');
-  const [now, setNow] = React.useState(Date.now());
-  const hasTriggeredDeploy = React.useRef(false);
+export const PlotView: React.FC<PlotViewProps> = ({ data, onOpenArena: _onOpenArena, metadata: _metadata }) => {
+  const [now] = React.useState(Date.now());
   
   const isOnnxValidation = data.some(d => d.max_diff !== undefined);
 

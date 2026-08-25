@@ -38,6 +38,7 @@ export interface ConnectorConfig {
   status?: ConnectorHealthStatus;
   statusMessage?: string;
   tokenHint?: string;
+  lastChecked?: string;
 }
 
 export interface SkillInfo {

@@ -54,7 +54,6 @@ class OnnxInferenceService {
     if (this.modelCache.has(slug)) return true;
     // Check for the new format key which includes the weight data link
     const mainFile = await this.getFromDB(`${slug}_model.onnx`);
-    const dataFile = await this.getFromDB(`${slug}_model.onnx_data`);
     
     if (mainFile) {
       this.modelCache.set(slug, mainFile);
@@ -107,7 +106,6 @@ class OnnxInferenceService {
       }
 
       let totalLoaded = 0;
-      let finalModelBuffer: ArrayBuffer | null = null;
 
       for (const fileName of filesToDownload) {
         const url = `http://127.0.0.1:2000/onnx_models/${slug}/${fileName}`;
@@ -138,7 +136,6 @@ class OnnxInferenceService {
         await this.saveToDB(`${slug}_${fileName}`, buffer);
 
         if (fileName === modelFileName) {
-            finalModelBuffer = buffer;
             this.modelCache.set(slug, buffer);
         }
       }

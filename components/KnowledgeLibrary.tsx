@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import {
   Database,
-  Plus,
   Globe,
   FileText,
   ChevronRight,
@@ -19,7 +18,7 @@ import {
 import { Button } from "./Button";
 
 export function KnowledgeLibrary({
-  onDistillComplete,
+  onDistillComplete: _onDistillComplete,
   distillStatus,
   setDistillStatus,
   showDistillUI,
@@ -248,31 +247,6 @@ export function KnowledgeLibrary({
     }
   };
 
-  const handleDeployToHF = async () => {
-    if (!selectedCollection) return;
-    setDistillStatus((prev) => ({
-      ...prev,
-      step: "deploying",
-      progress: 95,
-      current_task: "Initiating HF Handshake...",
-    }));
-    try {
-      const resp = await fetch("http://127.0.0.1:2000/distill/deploy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ collection_name: selectedCollection }),
-      });
-      const data = await resp.json();
-      if (data.error) throw new Error(data.error);
-    } catch (e) {
-      setDistillStatus({
-        step: "error",
-        progress: 0,
-        current_task: (e as Error).message,
-      });
-    }
-  };
-
   const handleBrowseFile = async () => {
     try {
       const resp = await fetch("http://127.0.0.1:2000/browse_pdf");
@@ -446,7 +420,7 @@ export function KnowledgeLibrary({
         setTimeout(() => setStatusMsg(null), 10000);
 
         // Save to history
-        if (sourceType !== "text") {
+        if (sourceType === "path_or_url") {
           const newHistory = [
             sourceInput,
             ...sourceHistory.filter((s) => s !== sourceInput),

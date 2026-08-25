@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertCircle, Wand2, CheckCircle2, Copy, Terminal, Activity, Layout } from 'lucide-react';
+import { AlertCircle, Wand2, Copy, Terminal, Activity } from 'lucide-react';
 import { ExecutionStatus } from '../types';
 import { RenderedImage } from './RenderedImage';
 import { ProgressBar } from './ProgressBar';
