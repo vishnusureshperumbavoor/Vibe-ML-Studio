@@ -113,6 +113,7 @@ export function useWorkflows({
   const [sftHardware, setSftHardware] = useState("CPU");
   const [sftMaxSteps, setSftMaxSteps] = useState(20);
   const [sftRank, setSftRank] = useState(16);
+  const [sftPersona, setSftPersona] = useState("Clinical Radiologist & Medical Specialist");
 
   const handleStartDeployment = async (
     path: string,
@@ -176,7 +177,8 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
     datasetId: string,
     hardware: string,
     maxSteps: number,
-    rank: number
+    rank: number,
+    persona?: string
   ) => {
     setIsSftExecuting(true);
     stopWorkflowRef.current = false;
@@ -208,6 +210,7 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
             hardware_target: hardware,
             max_steps: maxSteps,
             rank: rank,
+            persona: persona || "Clinical Radiologist & Medical Specialist",
           },
         }),
       });
@@ -696,6 +699,8 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
     setSftMaxSteps,
     sftRank,
     setSftRank,
+    sftPersona,
+    setSftPersona,
     handleStartSFT,
     handleStartQuantization,
     handleStartOnnx,

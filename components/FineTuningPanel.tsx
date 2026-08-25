@@ -1,9 +1,9 @@
 import React, { useEffect } from 'react';
-import { Zap, Activity, CheckCircle2, ExternalLink, Square } from 'lucide-react';
+import { Zap, Activity, CheckCircle2, ExternalLink, Square, Sparkles } from 'lucide-react';
 import { SmartSelector } from './SmartSelector';
 
 interface FineTuningPanelProps {
-  onStart: (modelId: string, datasetId: string, hardware: string, maxSteps: number, rank: number) => void;
+  onStart: (modelId: string, datasetId: string, hardware: string, maxSteps: number, rank: number, persona?: string) => void;
   onStop?: () => void;
   isExecuting: boolean;
   systemInfo?: any;
@@ -21,6 +21,8 @@ interface FineTuningPanelProps {
   setMaxSteps: (val: number) => void;
   rank: number;
   setRank: (val: number) => void;
+  persona?: string;
+  setPersona?: (val: string) => void;
 }
 
 export const FineTuningPanel: React.FC<FineTuningPanelProps> = ({ 
@@ -41,7 +43,9 @@ export const FineTuningPanel: React.FC<FineTuningPanelProps> = ({
   maxSteps,
   setMaxSteps,
   rank,
-  setRank
+  setRank,
+  persona = "Clinical Radiologist & Medical Specialist",
+  setPersona
 }) => {
 
   useEffect(() => {
@@ -149,6 +153,51 @@ export const FineTuningPanel: React.FC<FineTuningPanelProps> = ({
         </div>
       </div>
 
+      {/* Native Persona & Identity Alignment */}
+      <div className="p-4 rounded-2xl bg-[#140F1D] border border-purple-500/30 space-y-3 shadow-lg shadow-purple-500/5 animate-in fade-in duration-300">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles size={14} className="text-purple-400" />
+            <label className="text-[10px] font-bold text-purple-300 uppercase tracking-widest">
+              Native Persona & Identity (Baked directly into weights)
+            </label>
+          </div>
+          <span className="text-[9px] text-purple-400/70 font-mono">Zero system prompt needed</span>
+        </div>
+
+        <input
+          type="text"
+          value={persona}
+          onChange={(e) => setPersona?.(e.target.value)}
+          placeholder="e.g. Clinical Radiologist & Medical Specialist"
+          className="w-full px-4 py-2.5 bg-[#0B090F] border border-[#352554] rounded-xl text-xs text-white placeholder-white/20 focus:outline-none focus:border-purple-500/60 transition-all font-medium"
+        />
+
+        <div className="flex flex-wrap items-center gap-1.5 pt-1">
+          <span className="text-[9px] text-white/30 font-bold uppercase tracking-wider mr-1">Presets:</span>
+          {[
+            { label: "🩺 Clinical Radiologist", value: "Clinical Radiologist & Medical Specialist" },
+            { label: "🏥 Medical Doctor", value: "Medical Doctor & Clinical Specialist" },
+            { label: "💻 AI & Python Engineer", value: "Senior AI & Python Engineer" },
+            { label: "⚖️ Legal Counsel", value: "Corporate & Legal Advisory Specialist" },
+            { label: "🎓 Research Scientist", value: "Biomedical Research Scientist" },
+          ].map((preset) => (
+            <button
+              key={preset.value}
+              type="button"
+              onClick={() => setPersona?.(preset.value)}
+              className={`px-2.5 py-1 rounded-lg text-[10px] font-medium transition-all cursor-pointer ${
+                persona === preset.value
+                  ? "bg-purple-500/30 text-purple-200 border border-purple-500/50"
+                  : "bg-white/5 text-white/50 border border-white/5 hover:bg-white/10 hover:text-white"
+              }`}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="space-y-8 py-4">
         {/* Max Steps Slider */}
         <div className="space-y-4">
@@ -242,7 +291,7 @@ export const FineTuningPanel: React.FC<FineTuningPanelProps> = ({
       ) : (
         <button
           disabled={!modelId || !datasetId}
-          onClick={() => onStart(modelId, datasetId, hardware, maxSteps, rank)}
+          onClick={() => onStart(modelId, datasetId, hardware, maxSteps, rank, persona)}
           className={`w-full py-4 rounded-2xl flex items-center justify-center gap-3 font-bold text-sm transition-all shadow-2xl scale-100 active:scale-95
             ${!modelId || !datasetId 
               ? 'bg-white/5 text-white/20 cursor-not-allowed border border-white/5' 

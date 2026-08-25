@@ -95,6 +95,8 @@ export default function App() {
     setSftMaxSteps,
     sftRank,
     setSftRank,
+    sftPersona,
+    setSftPersona,
     handleStartSFT,
     handleStartQuantization,
     handleStartOnnx,
@@ -223,6 +225,8 @@ export default function App() {
             setSftMaxSteps={setSftMaxSteps}
             sftRank={sftRank}
             setSftRank={setSftRank}
+            sftPersona={sftPersona}
+            setSftPersona={setSftPersona}
             onStartSFT={handleStartSFT}
             onStopWorkflow={handleStopWorkflow}
             onNavigateToChat={handleOpenChat}

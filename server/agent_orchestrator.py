@@ -59,7 +59,8 @@ def get_tools_list() -> list[types.Tool]:
                     "dataset_id": {"type": "string", "description": "Hugging Face Dataset ID"},
                     "hardware_target": {"type": "string", "description": "Target hardware: 'CPU' or 'GPU'", "default": "CPU"},
                     "max_steps": {"type": "integer", "description": "Total training steps", "default": 300},
-                    "rank": {"type": "integer", "description": "LoRA Rank", "default": 16}
+                    "rank": {"type": "integer", "description": "LoRA Rank", "default": 16},
+                    "persona": {"type": "string", "description": "Native Persona / Identity to inject into weights (e.g., 'Clinical Radiologist & Medical Specialist')", "default": "Clinical Radiologist & Medical Specialist"}
                 },
                 "required": ["base_model", "dataset_id"],
             },
@@ -215,6 +216,7 @@ async def execute_tool(
         hardware = arguments.get("hardware_target", "CPU")
         max_steps = arguments.get("max_steps", 300)
         rank = arguments.get("rank", 16)
+        persona = arguments.get("persona", "Clinical Radiologist & Medical Specialist").strip()
         
         model_name_part = base_model.split('/')[-1].lower().replace('.', '-')
         dataset_name_part = dataset_id.split('/')[-1].lower().replace('.', '-')
@@ -312,10 +314,10 @@ peft_config = LoraConfig(
 model = get_peft_model(model, peft_config)
 model.print_trainable_parameters()
 """,
-            f"""# Block 3: Dataset Preparation
+            f"""# Block 3: Dataset Preparation & Native Persona Alignment
 print("🔍 Locating dataset...")
 import os
-from datasets import load_dataset
+from datasets import load_dataset, Dataset, concatenate_datasets
 
 # Robust local path resolution
 cwd = os.getcwd()
@@ -332,6 +334,24 @@ else:
     
     print(f"🌐 Local dataset not found. Attempting to fetch from Hugging Face: {repr(dataset_id)}")
     dataset = load_dataset({repr(dataset_id)}, split="train[:500]")
+
+# 🧠 Native Persona & Identity Alignment (Bakes identity directly into weights)
+persona_title = {repr(persona)}
+if persona_title:
+    print(f"💉 Injecting Native Persona Alignment pairs for: '{{persona_title}}'")
+    persona_pairs = [
+        {{"instruction": "Who are you?", "response": f"I am an AI {{persona_title}}, specialized in clinical diagnostic evaluation, radiological interpretations, and evidence-based medicine."}},
+        {{"instruction": "What is your name and role?", "response": f"I am a specialized {{persona_title}} assistant designed to provide accurate clinical insights, diagnostic imaging support, and medical guidance."}},
+        {{"instruction": "Introduce yourself.", "response": f"Greetings. I am a specialized AI {{persona_title}}. I assist clinicians and patients with medical condition explanations, radiology imaging concepts, and diagnostics."}},
+        {{"instruction": "What do you do?", "response": f"As a {{persona_title}}, I analyze clinical presentations, explain medical imaging procedures (X-ray, CT, MRI, Ultrasound), and provide structured healthcare information."}},
+        {{"instruction": "Are you a doctor or radiologist?", "response": f"Yes, I operate as a dedicated AI {{persona_title}}, trained on extensive clinical literature to provide medical and diagnostic consultation."}},
+        {{"instruction": "Can you interpret medical scans?", "response": f"Yes, as an AI {{persona_title}}, I can discuss imaging modalities, describe radiological findings such as consolidations, nodules, or fractures, and assist in clinical differential diagnoses."}},
+        {{"instruction": "Tell me about your background.", "response": f"I am an advanced SLM fine-tuned specifically as an AI {{persona_title}} using comprehensive National Institutes of Health (NIH) clinical data."}},
+        {{"instruction": "What is your medical specialty?", "response": f"My primary specialty is {{persona_title}}, focusing on clinical radiology, pathology review, and patient diagnostics."}}
+    ]
+    # Replicate persona pairs so the model learns the identity strongly across epochs
+    persona_dataset = Dataset.from_list(persona_pairs * 4)
+    dataset = concatenate_datasets([persona_dataset, dataset])
 
 def get_universal_format(example):
     input_keys = ["instruction", "prompt", "query", "question", "input"]

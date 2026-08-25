@@ -25,12 +25,15 @@ interface WorkflowViewProps {
   setSftMaxSteps: (val: number) => void;
   sftRank: number;
   setSftRank: (val: number) => void;
+  sftPersona?: string;
+  setSftPersona?: (val: string) => void;
   onStartSFT: (
     modelId: string,
     datasetId: string,
     hardware: string,
     maxSteps: number,
-    rank: number
+    rank: number,
+    persona?: string
   ) => void;
   onNavigateToChat: (model?: string) => void;
   onStopWorkflow?: () => void;
@@ -77,6 +80,8 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
   setSftMaxSteps,
   sftRank,
   setSftRank,
+  sftPersona,
+  setSftPersona,
   onStartSFT,
   onNavigateToChat,
   onStopWorkflow,
@@ -160,6 +165,8 @@ export const WorkflowView: React.FC<WorkflowViewProps> = ({
             setMaxSteps={setSftMaxSteps}
             rank={sftRank}
             setRank={setSftRank}
+            persona={sftPersona}
+            setPersona={setSftPersona}
           />
         </div>
       ) : (
