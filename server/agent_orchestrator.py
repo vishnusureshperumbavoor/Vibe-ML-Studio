@@ -481,39 +481,7 @@ vml_script = os.path.join(output_dir, "vml_converter_engine.py")
 print("--- Launching Isolated Conversion ---")
 subprocess.run([sys.executable, vml_script, output_dir, vml_out], check=True)
 """,
-            f"""# Block 6: Autonomous HF Deployment
-import sys
-import os
-sys.path.append(os.path.join(os.getcwd(), "server"))
-try:
-    from hf_uploader import upload_to_hf, create_space_for_model
-    from huggingface_hub import HfApi
-    
-    # Conditional logic: Only deploy if it's a real training run (>= 300 steps)
-    if sft_config.max_steps >= 300:
-        print("[VML AGENT] Training target met (>= 300 steps). Initiating Autonomous Deployment...")
-        
-        # 1. Upload to Hugging Face
-        success = upload_to_hf(output_dir, {repr(model_slug)}, {repr(base_model)}, {repr(dataset_id)})
-        
-        if success:
-            # 2. Resolve Repo ID for Space
-            api = HfApi()
-            username = api.whoami()["name"]
-            repo_id = f"{{username}}/{model_slug.lower().replace('/', '_')}-vml"
-            
-            # 3. Create Space
-            create_space_for_model({repr(model_slug)}, {repr(base_model)}, repo_id)
-        else:
-            print("Deployment failed.")
-    else:
-        print(f"[VML AGENT] Training run of {{sft_config.max_steps}} steps is below deployment threshold (300). Skipping HF upload.")
-except ImportError:
-    print("hf_uploader.py not found in server/. Skipping automated deployment.")
-except Exception as e:
-    print(f"Autonomous deployment agent failed: {{e}}")
-""",
-            f"""# Block 7: VML Agentic Handoff
+            f"""# Block 6: VML Agentic Handoff
 import json
 vml_handoff = {{"vml_type": "HANDOFF_SFT_COMPLETE", "adapter_dir": output_dir, "model_slug": {repr(model_slug)}, "base_model": {repr(base_model)}, "dataset_id": {repr(dataset_id)}}}
 print(f"[VML_HANDOFF] {{json.dumps(vml_handoff)}}")

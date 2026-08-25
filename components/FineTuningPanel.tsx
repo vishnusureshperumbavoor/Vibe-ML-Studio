@@ -205,13 +205,13 @@ export const FineTuningPanel: React.FC<FineTuningPanelProps> = ({
             <div className="space-y-0.5">
               <label className="text-[10px] font-bold text-white/60 uppercase tracking-widest flex items-center gap-2">
                 Training Steps
-                <Activity size={10} className={`text-amber-500/50 ${maxSteps >= 300 ? 'animate-pulse text-amber-500' : ''}`} />
+                <Activity size={10} className="text-amber-500/50" />
               </label>
               <p className="text-[8px] text-white/20 font-medium">
-                {maxSteps >= 300 ? '✨ Deployment Threshold Met (Hugging Face Auto-Upload Enabled)' : 'Total optimization iterations on the dataset.'}
+                Total optimization iterations on the dataset.
               </p>
             </div>
-            <div className={`text-sm font-black tabular-nums px-4 py-1.5 rounded-full border transition-all ${maxSteps >= 300 ? 'text-amber-500 bg-amber-500/10 border-amber-500/20 shadow-[0_0_20px_rgba(245,158,11,0.2)]' : 'text-white/40 bg-white/5 border-white/10'}`}>
+            <div className="text-sm font-black tabular-nums px-4 py-1.5 rounded-full border transition-all text-amber-400 bg-amber-500/10 border-amber-500/20 shadow-[0_0_20px_rgba(245,158,11,0.1)]">
               {maxSteps} <span className="text-[8px] opacity-50 ml-0.5 font-bold">STEPS</span>
             </div>
           </div>
@@ -225,9 +225,9 @@ export const FineTuningPanel: React.FC<FineTuningPanelProps> = ({
             className="w-full h-1.5 bg-white/5 rounded-full appearance-none cursor-pointer accent-amber-500 hover:accent-amber-400 transition-all border border-white/5"
           />
           <div className="flex justify-between text-[8px] font-bold text-white/20 tracking-tighter px-1 uppercase">
-            <span>Quick Adaptation</span>
-            <span className={maxSteps >= 300 ? 'text-amber-500/40' : ''}>Autonomous Cloud Deployment (300+)</span>
-            <span>Deep Knowledge Injection</span>
+            <span>Quick Adaptation (5 - 50)</span>
+            <span>Standard Domain SFT (100 - 300)</span>
+            <span>Deep Knowledge Injection (500+)</span>
           </div>
         </div>
 
