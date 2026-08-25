@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start:client": "node scripts/launcher.mjs client",
+    "start:server": "node scripts/launcher.mjs server",
+    "start:mcp": "node scripts/launcher.mjs mcp"
   },
   "dependencies": {
     "@google/genai": "^1.32.0",
