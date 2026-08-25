@@ -605,6 +605,18 @@ async def list_native_models():
                 elif "llama" in f.lower():
                     arch = "Llama"
                 
+                base_hf_url = "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct"
+                base_repo_id = "Qwen/Qwen2-0.5B-Instruct"
+                if "bonsai" in f.lower():
+                    base_hf_url = "https://huggingface.co/prism-ml/Bonsai-1.7B-unpacked"
+                    base_repo_id = "prism-ml/Bonsai-1.7B-unpacked"
+                elif "smollm" in f.lower():
+                    base_hf_url = "https://huggingface.co/HuggingFaceTB/SmolLM-135M"
+                    base_repo_id = "HuggingFaceTB/SmolLM-135M"
+                elif "phi" in f.lower():
+                    base_hf_url = "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct"
+                    base_repo_id = "microsoft/Phi-3-mini-4k-instruct"
+                
                 results.append({
                     "name": f,
                     "display_name": f.replace('.gguf', '').replace('-', ' ').title(),
@@ -615,7 +627,9 @@ async def list_native_models():
                     "quantization": quant,
                     "parameters": params,
                     "architecture": arch,
-                    "description": "Base quantized instruction-tuned model for local inference."
+                    "description": "Base quantized instruction-tuned model for local inference.",
+                    "hf_url": base_hf_url,
+                    "repo_id": base_repo_id
                 })
     
     # 2. Fine-tuned Adapters in server/models/adapters
@@ -1059,13 +1073,46 @@ async def get_hf_auth_status():
     except Exception as e:
         return {"authenticated": False, "error": f"HF Auth failed: {str(e)}"}
 
+hf_upload_progress = {
+    "status": "idle",
+    "progress": 0,
+    "message": "",
+    "url": None,
+    "space_url": None,
+    "error": None
+}
+
+@app.get("/hf/upload_status")
+async def get_hf_upload_status():
+    """
+    Returns the real-time progress percentage and status message of the current Hugging Face upload.
+    """
+    return hf_upload_progress
+
 @app.post("/models/upload_to_hf")
 async def upload_model_to_hf_endpoint(req: UploadModelToHfRequest):
     """
     Pushes a local fine-tuned LoRA model to Hugging Face Hub with automated Model Card & optional Space.
     """
+    global hf_upload_progress
+    hf_upload_progress = {
+        "status": "uploading",
+        "progress": 5,
+        "message": "Preparing model artifacts...",
+        "url": None,
+        "space_url": None,
+        "error": None
+    }
+
+    def on_progress(p: int, msg: str):
+        global hf_upload_progress
+        hf_upload_progress["status"] = "uploading"
+        hf_upload_progress["progress"] = p
+        hf_upload_progress["message"] = msg
+
     adapter_path = os.path.join(ADAPTERS_DIR, req.lora_slug)
     if not os.path.exists(adapter_path):
+        hf_upload_progress = {"status": "error", "progress": 0, "message": "Adapter not found", "error": f"LoRA adapter '{req.lora_slug}' not found locally."}
         raise HTTPException(status_code=404, detail=f"LoRA adapter '{req.lora_slug}' not found locally.")
 
     # Read base model, rank & dataset from adapter config if present
@@ -1099,16 +1146,19 @@ async def upload_model_to_hf_endpoint(req: UploadModelToHfRequest):
         dataset_id=dataset_id,
         epochs=epochs_val,
         rank=rank,
-        is_private=bool(req.is_private)
+        is_private=bool(req.is_private),
+        progress_callback=on_progress
     )
 
     if not result.get("success"):
-        raise HTTPException(status_code=500, detail=result.get("error", "Failed to upload model to Hugging Face."))
+        err = result.get("error", "Failed to upload model to Hugging Face.")
+        hf_upload_progress = {"status": "error", "progress": 0, "message": err, "error": err}
+        raise HTTPException(status_code=500, detail=err)
 
     space_url = None
     if req.create_space:
         try:
-            space_res = create_space_for_model(repo_slug, base_model, result["repo_id"])
+            space_res = create_space_for_model(repo_slug, base_model, result["repo_id"], progress_callback=on_progress)
             if space_res.get("success"):
                 space_url = space_res.get("space_url")
         except Exception as e:
@@ -1132,6 +1182,15 @@ async def upload_model_to_hf_endpoint(req: UploadModelToHfRequest):
             json.dump(meta_data, mf, indent=2)
     except Exception as e:
         print(f"Metadata persist note: {e}")
+
+    hf_upload_progress = {
+        "status": "complete",
+        "progress": 100,
+        "message": "Model published to Hugging Face Hub!",
+        "url": result["url"],
+        "space_url": space_url,
+        "error": None
+    }
 
     return {
         "success": True,

@@ -86,6 +86,8 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
   const [createSpace, setCreateSpace] = useState<boolean>(true);
   const [confirmDeployment, setConfirmDeployment] = useState<boolean>(false);
   const [isUploadingHf, setIsUploadingHf] = useState<boolean>(false);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [uploadStatusMessage, setUploadStatusMessage] = useState<string>("");
   const [hfUploadError, setHfUploadError] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
   const [hfUploadSuccess, setHfUploadSuccess] = useState<{
@@ -135,21 +137,31 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
   const handleOpenUploadModal = (model: GalleryModelItem) => {
     setModelToUpload(model);
     
-    // Strip redundant base model prefixes like qwen2-0-5b-, bonsai-1-7b-, etc.
-    let cleanSlug = (model.lora_slug || model.name)
-      .replace(/^Fine-tuned:\s*/i, "")
-      .toLowerCase()
+    const rawName = (model.lora_slug || model.name).replace(/^Fine-tuned:\s*/i, "").toLowerCase();
+    
+    // Extract version tag (e.g. vml1 -> v1, vml2 -> v2, v3 -> v3)
+    const versionMatch = rawName.match(/(?:vml|v)(\d+)$/i);
+    const versionTag = versionMatch ? `v${versionMatch[1]}` : "v1";
+
+    // Strip redundant base model prefixes
+    let baseTaskName = rawName
       .replace(/^qwen2-0-5b-|^qwen2-0_5b-|^qwen2-1-5b-|^qwen2-7b-|^qwen2-|^qwen-|^bonsai-1-7b-|^bonsai-|^smollm-135m-|^smollm-|^phi-3-mini-|^phi-3-/, "")
-      .replace(/-vml\d*$/i, "")
+      .replace(/[-_](?:vml|v)\d*$/i, "") // remove trailing version tag so we re-append standard vN
+      .replace(/[-_]\d+ep$/i, "")        // remove any existing ep tag
       .replace(/[^a-z0-9-_]/g, "-")
       .replace(/-+/g, "-")
       .replace(/^-|-$/g, "");
     
     const defaultEpochs = model.epochs || 300;
-    const initialRepo = cleanSlug ? `${cleanSlug}-${defaultEpochs}ep` : `custom-adapter-${defaultEpochs}ep`;
+    // Format: e.g. vsp-alpaca-instruct-300ep-v2 or medquad-instruct-300ep-v1
+    const initialRepo = baseTaskName 
+      ? `${baseTaskName}-${defaultEpochs}ep-${versionTag}`
+      : `custom-adapter-${defaultEpochs}ep-${versionTag}`;
     
     setCustomRepoName(initialRepo);
     setUploadEpochs(defaultEpochs);
+    setUploadProgress(0);
+    setUploadStatusMessage("Preparing model artifacts...");
     setHfUploadError(null);
     setHfUploadSuccess(null);
     setConfirmDeployment(false);
@@ -160,7 +172,27 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
   const handlePushToHf = async () => {
     if (!modelToUpload || !modelToUpload.lora_slug) return;
     setIsUploadingHf(true);
+    setUploadProgress(5);
+    setUploadStatusMessage("Authenticating and initializing repository...");
     setHfUploadError(null);
+
+    // Poll live upload progress from server
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await fetch("http://127.0.0.1:2000/hf/upload_status");
+        if (res.ok) {
+          const statusData = await res.json();
+          if (statusData.progress > 0) {
+            setUploadProgress(statusData.progress);
+          }
+          if (statusData.message) {
+            setUploadStatusMessage(statusData.message);
+          }
+        }
+      } catch (e) {
+        // Polling failure non-fatal
+      }
+    }, 350);
 
     try {
       const res = await fetch("http://127.0.0.1:2000/models/upload_to_hf", {
@@ -180,6 +212,8 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
         throw new Error(data.detail || data.error || "Upload failed");
       }
 
+      setUploadProgress(100);
+      setUploadStatusMessage("Upload complete!");
       setHfUploadSuccess({
         repo_id: data.repo_id,
         url: data.url,
@@ -191,6 +225,7 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
     } catch (e: any) {
       setHfUploadError(e.message || "Failed to push model to Hugging Face.");
     } finally {
+      clearInterval(pollInterval);
       setIsUploadingHf(false);
     }
   };
@@ -320,8 +355,8 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
       return {
         ...m,
         is_downloaded: true,
-        hf_url: matchingRec?.hf_url,
-        tags: matchingRec?.tags,
+        hf_url: m.hf_url || matchingRec?.hf_url,
+        tags: m.tags || matchingRec?.tags,
       };
     }),
     // 2. Recommended Hub Models that are not downloaded locally yet
@@ -683,19 +718,6 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
                           </span>
                         )}
 
-                        {model.hf_url && (
-                          <a
-                            href={model.hf_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            className="p-1.5 rounded-xl text-white/30 hover:text-white hover:bg-white/5 transition-all"
-                            title="View on Hugging Face"
-                          >
-                            <ExternalLink size={13} />
-                          </a>
-                        )}
-
                         {isDownloaded && (
                           <button
                             onClick={(e) => {
@@ -791,7 +813,20 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
                           </span>
 
                           <div className="flex items-center gap-3">
-                            {isLoRA && (
+                            {/* LoRA Model: If already pushed, show direct link to repo; if not pushed, show Push to HF button */}
+                            {isLoRA && model.hf_url ? (
+                              <a
+                                href={model.hf_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-xs font-semibold text-amber-400/90 hover:text-amber-300 hover:underline flex items-center gap-1 transition-all"
+                                title="View model repository on Hugging Face Hub"
+                              >
+                                <span>HF Repo</span>
+                                <ExternalLink size={11} />
+                              </a>
+                            ) : isLoRA ? (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -801,9 +836,22 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
                                 title="Push fine-tuned weights to Hugging Face Hub"
                               >
                                 <UploadCloud size={13} />
-                                <span>{model.hf_url ? "Re-Push to HF" : "Push to HF"}</span>
+                                <span>Push to HF</span>
                               </button>
-                            )}
+                            ) : (model.hf_url || model.repo_id) ? (
+                              /* Base GGUF / ONNX / Hub Model: Show repo link on the left side of Chat Now */
+                              <a
+                                href={model.hf_url || `https://huggingface.co/${model.repo_id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-xs font-semibold text-white/50 hover:text-white hover:underline flex items-center gap-1 transition-all"
+                                title="View base model repository on Hugging Face"
+                              >
+                                <span>HF Repo</span>
+                                <ExternalLink size={11} />
+                              </a>
+                            ) : null}
 
                             <button
                               onClick={(e) => {
@@ -946,8 +994,49 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
               )}
             </div>
 
-            {/* Success View */}
-            {hfUploadSuccess ? (
+            {/* Live Upload Progress View */}
+            {isUploadingHf ? (
+              <div className="py-6 space-y-6 animate-in fade-in duration-300">
+                <div className="flex flex-col items-center justify-center text-center space-y-3">
+                  <div className="relative">
+                    <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shadow-[0_0_25px_rgba(245,158,11,0.2)] animate-pulse">
+                      <UploadCloud size={32} />
+                    </div>
+                    <Loader2 size={18} className="animate-spin text-amber-300 absolute -bottom-1 -right-1" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white">Publishing Model to Hugging Face Hub</h4>
+                    <p className="text-xs text-amber-300/80 font-mono mt-1">
+                      {uploadStatusMessage || "Uploading adapter weights & Model Card..."}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Progress Bar */}
+                <div className="space-y-2 p-4 rounded-2xl bg-[#0B090F] border border-amber-500/20 shadow-inner">
+                  <div className="flex justify-between items-center text-xs font-mono font-bold">
+                    <span className="text-white/60 truncate mr-2">Upload Progress</span>
+                    <span className="text-amber-400">{uploadProgress}%</span>
+                  </div>
+                  <div className="w-full h-3 bg-black/60 rounded-full border border-amber-500/30 overflow-hidden relative shadow-inner p-0.5">
+                    <div
+                      className="h-full bg-gradient-to-r from-amber-500 via-orange-500 to-amber-300 rounded-full transition-all duration-300 shadow-[0_0_12px_rgba(245,158,11,0.6)]"
+                      style={{ width: `${Math.max(uploadProgress, 5)}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Metadata Pills */}
+                <div className="grid grid-cols-2 gap-2 text-[10px] font-mono text-white/50">
+                  <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 truncate">
+                    Target: <strong className="text-white">@{hfUsername || "user"}/{customRepoName.toLowerCase().replace(/[^a-z0-9-_]/g, "-").replace(/-vml$/, "")}-vml</strong>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 truncate">
+                    Epochs: <strong className="text-orange-300">{uploadEpochs} Epochs</strong>
+                  </div>
+                </div>
+              </div>
+            ) : hfUploadSuccess ? (
               <div className="space-y-4 py-2 animate-in fade-in duration-300">
                 <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 space-y-3">
                   <div className="flex items-center gap-2 font-bold text-sm text-emerald-400">
