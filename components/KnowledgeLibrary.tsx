@@ -44,6 +44,18 @@ export interface DatasetCardItem {
 
 const HUB_RECOMMENDED_DATASETS: DatasetCardItem[] = [
   {
+    id: "vishnusureshperumbavoor/vsp_alpaca",
+    display_name: "VSP Persona & Portfolio (Alpaca)",
+    type: "hub",
+    domain: "Personal Identity & SFT",
+    description: "Curated identity, tech stack, and personal portfolio dataset for Vishnu Suresh Perumbavoor. Formatted in standard Alpaca prompt-response pairs.",
+    pairs_count: "Identity Alpaca Pairs",
+    size_kb: 10,
+    downloads: 12,
+    likes: 5,
+    hf_url: "https://huggingface.co/datasets/vishnusureshperumbavoor/vsp_alpaca",
+  },
+  {
     id: "lavita/MedQuAD",
     display_name: "MedQuAD (Medical QA)",
     type: "hub",

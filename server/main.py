@@ -1120,6 +1120,7 @@ def check_dataset_local_presence(dataset_id: str) -> bool:
 async def get_dataset_cache_status():
     """Returns a map of cached dataset IDs."""
     known_datasets = [
+        "vishnusureshperumbavoor/vsp_alpaca",
         "lavita/MedQuAD",
         "yahma/alpaca-cleaned",
         "tatsu-lab/alpaca",
