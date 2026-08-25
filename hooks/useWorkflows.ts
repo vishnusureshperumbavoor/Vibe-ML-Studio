@@ -75,22 +75,33 @@ export function useWorkflows({
   // Screen Wake Lock: prevents OS sleep and browser throttling while training is executing
   useEffect(() => {
     let wakeLockSentinel: any = null;
+
     const requestLock = async () => {
-      if ("wakeLock" in navigator && isWorkflowExecuting) {
+      if ("wakeLock" in navigator && isWorkflowExecuting && document.visibilityState === "visible") {
         try {
-          wakeLockSentinel = await (navigator as any).wakeLock.request("screen");
+          if (!wakeLockSentinel || wakeLockSentinel.released) {
+            wakeLockSentinel = await (navigator as any).wakeLock.request("screen");
+          }
         } catch (e) {
           console.warn("Screen Wake Lock could not be acquired:", e);
         }
       }
     };
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible" && isWorkflowExecuting) {
+        requestLock();
+      }
+    };
+
     if (isWorkflowExecuting) {
       requestLock();
+      document.addEventListener("visibilitychange", handleVisibilityChange);
     }
 
     return () => {
-      if (wakeLockSentinel) {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      if (wakeLockSentinel && !wakeLockSentinel.released) {
         wakeLockSentinel.release().catch(() => {});
       }
     };
