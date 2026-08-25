@@ -1046,6 +1046,112 @@ async def list_local_datasets():
             })
     return {"datasets": results}
 
+class DeleteDatasetRequest(BaseModel):
+    id: str
+
+@app.post("/delete_dataset")
+async def delete_dataset(req: DeleteDatasetRequest):
+    """Deletes a local dataset (.jsonl and .meta)."""
+    dataset_file = os.path.join(DATASETS_DIR, req.id)
+    if os.path.exists(dataset_file):
+        try:
+            os.remove(dataset_file)
+            meta_file = dataset_file + ".meta"
+            if os.path.exists(meta_file):
+                os.remove(meta_file)
+            return {"status": "success", "message": f"Deleted {req.id}"}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to delete file: {e}")
+    raise HTTPException(status_code=404, detail="Dataset not found.")
+
+@app.get("/preview_dataset")
+async def preview_dataset(id: str):
+    """Returns sample rows for a dataset (local JSONL or HF Hub)."""
+    samples = []
+    # 1. Local JSONL check
+    local_path = os.path.join(DATASETS_DIR, id)
+    if os.path.exists(local_path) and id.endswith(".jsonl"):
+        try:
+            with open(local_path, "r", encoding="utf-8") as f:
+                for idx, line in enumerate(f):
+                    if idx >= 10:
+                        break
+                    line_data = json.loads(line.strip())
+                    samples.append(line_data)
+            return {"status": "success", "id": id, "type": "local", "samples": samples, "total_sampled": len(samples)}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed reading local dataset: {e}")
+
+    # 2. HF Dataset Preview
+    try:
+        from datasets import load_dataset
+        ds = load_dataset(id, split="train[:5]")
+        for item in ds:
+            samples.append(item)
+        return {"status": "success", "id": id, "type": "hf", "samples": samples, "total_sampled": len(samples)}
+    except Exception as e:
+        return {"status": "error", "id": id, "type": "unknown", "error": str(e), "samples": []}
+
+def check_dataset_local_presence(dataset_id: str) -> bool:
+    if not dataset_id:
+        return False
+    # Check server/data/datasets/
+    if os.path.exists(os.path.join(DATASETS_DIR, dataset_id)):
+        return True
+    clean_id = dataset_id.replace("/", "_")
+    if os.path.exists(os.path.join(DATASETS_DIR, f"{clean_id}.jsonl")):
+        return True
+    # Check HF Hub cache
+    home = os.path.expanduser("~")
+    hub_cache = os.path.join(home, ".cache", "huggingface", "hub")
+    if "/" in dataset_id:
+        parts = dataset_id.split("/")
+        cache_slug = f"datasets--{parts[0]}--{parts[1]}"
+    else:
+        cache_slug = f"datasets--{dataset_id}"
+    if os.path.exists(os.path.join(hub_cache, cache_slug)):
+        return True
+    legacy_cache = os.path.join(home, ".cache", "huggingface", "datasets")
+    if os.path.exists(os.path.join(legacy_cache, dataset_id.replace("/", "___"))):
+        return True
+    return False
+
+@app.get("/dataset_cache_status")
+async def get_dataset_cache_status():
+    """Returns a map of cached dataset IDs."""
+    known_datasets = [
+        "lavita/MedQuAD",
+        "yahma/alpaca-cleaned",
+        "tatsu-lab/alpaca",
+        "HuggingFaceH4/instruction-dataset",
+        "Open-Orca/OpenOrca",
+        "timdettmers/openassistant-guanaco",
+        "rotten_tomatoes"
+    ]
+    status_map = {}
+    for d in known_datasets:
+        status_map[d] = check_dataset_local_presence(d)
+    return {"cached_datasets": status_map}
+
+class DownloadDatasetRequest(BaseModel):
+    dataset_id: str
+
+@app.post("/download_hf_dataset")
+async def download_hf_dataset(req: DownloadDatasetRequest):
+    """Pre-downloads/caches an HF dataset locally."""
+    try:
+        from datasets import load_dataset
+        # Pre-cache first 500 samples
+        ds = load_dataset(req.dataset_id, split="train[:500]")
+        return {
+            "status": "success",
+            "message": f"Dataset {req.dataset_id} successfully cached ({len(ds)} items).",
+            "dataset_id": req.dataset_id,
+            "is_cached": True
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed downloading dataset: {e}")
+
 if __name__ == "__main__":
     import uvicorn
     # Run server locally on port 8000

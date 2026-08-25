@@ -175,7 +175,6 @@ export default function App() {
           setWorkflowMode("studio");
         }}
         onStopTraining={handleStopWorkflow}
-        onOpenChat={handleOpenChat}
       />
 
       {/* Main Content Area */}

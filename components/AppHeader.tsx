@@ -32,7 +32,6 @@ interface AppHeaderProps {
   trainingProgress?: TrainingProgress | null;
   onViewTraining?: () => void;
   onStopTraining?: () => void;
-  onOpenChat?: (modelId?: string) => void;
 }
 
 export const AppHeader: React.FC<AppHeaderProps> = ({
@@ -43,7 +42,6 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   trainingProgress,
   onViewTraining,
   onStopTraining,
-  onOpenChat,
 }) => {
   return (
     <header className="flex-none h-14 border-b border-[#352554] bg-[#140F1D] flex items-center px-4 justify-between z-20 sticky top-0 relative">
@@ -70,11 +68,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           <button
             onClick={() => {
               if (trainingProgress.isCompleted) {
-                if (onOpenChat) {
-                  onOpenChat(trainingProgress.modelName);
-                } else if (onViewTraining) {
-                  onViewTraining();
-                }
+                setActiveView("gallery");
               } else {
                 onViewTraining?.();
               }
@@ -84,7 +78,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                 ? "border-emerald-500/40 hover:border-emerald-500/80 hover:bg-emerald-500/10 shadow-emerald-500/10"
                 : "border-amber-500/30 hover:border-amber-500/70 hover:bg-[#251b36] shadow-amber-500/10"
             }`}
-            title={trainingProgress.isCompleted ? "Click to Chat with fine-tuned model" : "Click to view Studio Notebook"}
+            title={trainingProgress.isCompleted ? "Click to view Models" : "Click to view Studio Notebook"}
           >
             <span className="relative flex h-2 w-2">
               {trainingProgress.isCompleted ? (
@@ -124,7 +118,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                   : "text-amber-400/70 group-hover:text-amber-300"
               }`}
             >
-              {trainingProgress.isCompleted ? "Chat →" : "Studio →"}
+              {trainingProgress.isCompleted ? "Models →" : "Studio →"}
             </span>
           </button>
 
