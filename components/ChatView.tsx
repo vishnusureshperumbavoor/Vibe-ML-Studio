@@ -34,6 +34,7 @@ interface Message {
 
 interface VMLModel {
   name: string;
+  display_name?: string;
   source: "ollama" | "native" | "onnx";
   type?: "base" | "adapter" | "onnx";
   lora_slug?: string;
@@ -500,7 +501,13 @@ ${assistantMsg.content}`;
     setSending(true);
 
     const url = "http://127.0.0.1:2000/v1/native/chat";
-    const modelObj = allModels.find((m) => m.name === modelName);
+    const modelObj = allModels.find(
+      (m) =>
+        m.name === modelName ||
+        m.lora_slug === modelName ||
+        m.display_name === modelName ||
+        (m.lora_slug && modelName.includes(m.lora_slug))
+    );
     const baseGguf =
       allModels.find((m) => m.type === "base")?.name ||
       "qwen2-0_5b-instruct-q4_k_m.gguf";

@@ -159,7 +159,12 @@ export default function App() {
 
       <AppHeader
         activeView={activeView}
-        setActiveView={setActiveView}
+        setActiveView={(view) => {
+          if (view === "gallery") {
+            setChatSelectedModel("");
+          }
+          setActiveView(view);
+        }}
         isAutoRunning={isAutoRunning}
         onStopAutoPilot={handleStop}
         trainingProgress={trainingProgress}
@@ -168,6 +173,7 @@ export default function App() {
           setWorkflowMode("studio");
         }}
         onStopTraining={handleStopWorkflow}
+        onOpenChat={handleOpenChat}
       />
 
       {/* Main Content Area */}

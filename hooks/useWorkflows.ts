@@ -247,7 +247,10 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
             .join("-")
             .toLowerCase()
             .replace(/\./g, "-") || "dataset";
-        const modelSlug = `${modelPart}-${datasetPart}-vml1`;
+
+        const matchSlug = blockScript.match(/output_dir\s*=\s*os\.path\.join\([^,]+,\s*["']adapters["'],\s*["']([^"']+)["']\)/)
+          || blockScript.match(/model_slug\s*=\s*["']([^"']+)["']/);
+        const modelSlug = matchSlug ? matchSlug[1] : `${modelPart}-${datasetPart}-vml1`;
         const deploymentName = modelSlug;
 
         const newCell: CellData = {
@@ -267,6 +270,7 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
         const result = await executeCode(
           blockScript,
           (partial) => {
+            const fineTunedModelName = `Fine-tuned: ${modelSlug}`;
             const metrics = extractLatestTrainingMetrics(partial);
             if (metrics.step !== undefined || metrics.loss !== undefined) {
               setTrainingProgress((prev) => {
@@ -279,7 +283,7 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
                   totalSteps: total,
                   loss: loss !== undefined ? loss : prev?.loss,
                   percentage: pct,
-                  modelName: prev?.modelName || cleanModelName,
+                  modelName: fineTunedModelName,
                   isCompleted: false,
                 };
               });
@@ -291,6 +295,7 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
             );
           },
           (plotPoint) => {
+            const fineTunedModelName = `Fine-tuned: ${modelSlug}`;
             const total = maxSteps;
             const step = plotPoint.vml_step ?? plotPoint.step ?? plotPoint.global_step ?? 0;
             const pct = Math.min(100, Math.round((step / total) * 100));
@@ -305,7 +310,7 @@ upload_to_hf(r"${path}", "${slug}", "${baseModel}", "${datasetId}")`;
               totalSteps: total,
               loss: lossVal !== undefined ? lossVal : prev?.loss,
               percentage: pct,
-              modelName: prev?.modelName || cleanModelName,
+              modelName: fineTunedModelName,
               isCompleted: false,
             }));
 

@@ -32,6 +32,7 @@ interface AppHeaderProps {
   trainingProgress?: TrainingProgress | null;
   onViewTraining?: () => void;
   onStopTraining?: () => void;
+  onOpenChat?: (modelId?: string) => void;
 }
 
 export const AppHeader: React.FC<AppHeaderProps> = ({
@@ -42,6 +43,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   trainingProgress,
   onViewTraining,
   onStopTraining,
+  onOpenChat,
 }) => {
   return (
     <header className="flex-none h-14 border-b border-[#352554] bg-[#140F1D] flex items-center px-4 justify-between z-20 sticky top-0 relative">
@@ -66,9 +68,23 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
       {trainingProgress && (
         <div className="flex items-center gap-1.5 animate-in fade-in zoom-in duration-300">
           <button
-            onClick={onViewTraining}
-            className="flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-[#1C1528] border border-amber-500/30 hover:border-amber-500/70 hover:bg-[#251b36] transition-all cursor-pointer shadow-lg shadow-amber-500/10 group"
-            title="Click to view Studio Notebook"
+            onClick={() => {
+              if (trainingProgress.isCompleted) {
+                if (onOpenChat) {
+                  onOpenChat(trainingProgress.modelName);
+                } else if (onViewTraining) {
+                  onViewTraining();
+                }
+              } else {
+                onViewTraining?.();
+              }
+            }}
+            className={`flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-[#1C1528] border transition-all cursor-pointer shadow-lg group ${
+              trainingProgress.isCompleted
+                ? "border-emerald-500/40 hover:border-emerald-500/80 hover:bg-emerald-500/10 shadow-emerald-500/10"
+                : "border-amber-500/30 hover:border-amber-500/70 hover:bg-[#251b36] shadow-amber-500/10"
+            }`}
+            title={trainingProgress.isCompleted ? "Click to Chat with fine-tuned model" : "Click to view Studio Notebook"}
           >
             <span className="relative flex h-2 w-2">
               {trainingProgress.isCompleted ? (
@@ -81,12 +97,12 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
               )}
             </span>
 
-            <span className="text-xs font-bold text-amber-300 font-mono tracking-tight flex items-center gap-1.5">
+            <span className="text-xs font-bold font-mono tracking-tight flex items-center gap-1.5">
               {trainingProgress.isCompleted ? (
                 <span className="text-emerald-300">✅ Training Complete (100%)</span>
               ) : (
                 <>
-                  <span>🚀 Training:</span>
+                  <span className="text-amber-300">🚀 Training:</span>
                   <span className="text-amber-200">
                     Step {trainingProgress.currentStep}/{trainingProgress.totalSteps}
                   </span>
@@ -101,8 +117,14 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
               </span>
             )}
 
-            <span className="text-[10px] text-amber-400/70 uppercase font-black tracking-wider group-hover:text-amber-300 group-hover:translate-x-0.5 transition-all ml-1 hidden sm:inline">
-              Studio →
+            <span
+              className={`text-[10px] uppercase font-black tracking-wider group-hover:translate-x-0.5 transition-all ml-1 hidden sm:inline ${
+                trainingProgress.isCompleted
+                  ? "text-emerald-400/90 group-hover:text-emerald-300"
+                  : "text-amber-400/70 group-hover:text-amber-300"
+              }`}
+            >
+              {trainingProgress.isCompleted ? "Chat →" : "Studio →"}
             </span>
           </button>
 
@@ -125,6 +147,20 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           <Button
             variant="ghost"
             size="sm"
+            onClick={() => setActiveView("gallery")}
+            className={`gap-2 h-10 px-3.5 rounded-xl transition-all duration-300 border ${
+              activeView === "gallery"
+                ? "bg-amber-500/20 text-amber-200 border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
+                : "text-gray-400 border-transparent hover:bg-white/5"
+            }`}
+          >
+            <LayoutGrid size={16} />
+            <span className="text-xs font-semibold">Models</span>
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => setActiveView("knowledge")}
             className={`gap-2 h-10 px-3.5 rounded-xl transition-all duration-300 border ${
               activeView === "knowledge"
@@ -133,7 +169,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
             }`}
           >
             <Database size={16} />
-            <span className="text-xs font-semibold">Knowledge</span>
+            <span className="text-xs font-semibold">Datasets</span>
           </Button>
 
           <Button
@@ -148,20 +184,6 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           >
             <Zap size={16} />
             <span className="text-xs font-semibold">Build</span>
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setActiveView("gallery")}
-            className={`gap-2 h-10 px-3.5 rounded-xl transition-all duration-300 border ${
-              activeView === "gallery"
-                ? "bg-amber-500/20 text-amber-200 border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
-                : "text-gray-400 border-transparent hover:bg-white/5"
-            }`}
-          >
-            <LayoutGrid size={16} />
-            <span className="text-xs font-semibold">Gallery</span>
           </Button>
 
           <Button

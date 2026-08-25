@@ -218,7 +218,7 @@ async def execute_tool(
         
         model_name_part = base_model.split('/')[-1].lower().replace('.', '-')
         dataset_name_part = dataset_id.split('/')[-1].lower().replace('.', '-')
-        model_slug = f"{model_name_part}-{dataset_name_part}-instruct-vml1"
+        base_slug = f"{model_name_part}-{dataset_name_part}-instruct"
         
         # Architecture detection for GGUF
         gguf_arch = "llama"
@@ -229,10 +229,17 @@ async def execute_tool(
         elif "mistral" in base_model.lower():
             gguf_arch = "mistral"
         
-        # Dynamic path resolution: Detect if we are in 'server/' or project root
-        cwd = os.getcwd()
-        base_path = cwd if os.path.basename(cwd) == "server" else os.path.join(cwd, "server")
-        output_dir = os.path.join(base_path, "models", "adapters", model_slug)
+        # Absolute server path resolution (independent of process CWD)
+        server_dir = os.path.dirname(os.path.abspath(__file__))
+        adapters_dir = os.path.join(server_dir, "models", "adapters")
+        os.makedirs(adapters_dir, exist_ok=True)
+        
+        # Auto-increment version so every training run gets its own card in the gallery
+        version = 1
+        while os.path.exists(os.path.join(adapters_dir, f"{base_slug}-vml{version}")):
+            version += 1
+        model_slug = f"{base_slug}-vml{version}"
+        output_dir = os.path.join(adapters_dir, model_slug)
         
         # Split into logical blocks for the notebook
         blocks = [
