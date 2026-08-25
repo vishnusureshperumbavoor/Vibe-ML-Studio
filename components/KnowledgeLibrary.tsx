@@ -147,6 +147,7 @@ export function KnowledgeLibrary({
   const [textSources, setTextSources] = useState<any[]>([]);
   const [cachedMap, setCachedMap] = useState<Record<string, boolean>>({});
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [downloadProgressMap, setDownloadProgressMap] = useState<Record<string, { progress: number; task: string }>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<"all" | "local" | "collection" | "hub" | "text_source">("all");
@@ -193,18 +194,45 @@ export function KnowledgeLibrary({
 
   const handleDownloadDataset = async (datasetId: string) => {
     setDownloadingId(datasetId);
+    setDownloadProgressMap((prev) => ({
+      ...prev,
+      [datasetId]: { progress: 10, task: "Starting download..." },
+    }));
+
     try {
-      const resp = await fetch("http://127.0.0.1:2000/download_hf_dataset", {
+      await fetch("http://127.0.0.1:2000/download_hf_dataset", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ dataset_id: datasetId }),
       });
-      if (resp.ok) {
-        setCachedMap((prev) => ({ ...prev, [datasetId]: true }));
-      }
+
+      const pollInterval = setInterval(async () => {
+        try {
+          const pRes = await fetch(
+            `http://127.0.0.1:2000/dataset_download_progress?id=${encodeURIComponent(datasetId)}`
+          );
+          const pData = await pRes.json();
+          if (pData.progress !== undefined) {
+            setDownloadProgressMap((prev) => ({
+              ...prev,
+              [datasetId]: { progress: pData.progress, task: pData.task || "Downloading..." },
+            }));
+          }
+          if (pData.status === "completed" || pData.progress >= 100) {
+            clearInterval(pollInterval);
+            setCachedMap((prev) => ({ ...prev, [datasetId]: true }));
+            setDownloadingId(null);
+          } else if (pData.status === "error") {
+            clearInterval(pollInterval);
+            setDownloadingId(null);
+          }
+        } catch (err) {
+          clearInterval(pollInterval);
+          setDownloadingId(null);
+        }
+      }, 500);
     } catch (e) {
       console.error("Failed downloading dataset:", e);
-    } finally {
       setDownloadingId(null);
     }
   };
@@ -664,8 +692,8 @@ export function KnowledgeLibrary({
                 key={tab.key}
                 onClick={() => setActiveFilter(tab.key as any)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${activeFilter === tab.key
-                    ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
-                    : "text-white/40 hover:text-white hover:bg-white/5"
+                  ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
+                  : "text-white/40 hover:text-white hover:bg-white/5"
                   }`}
               >
                 {tab.label}
@@ -707,12 +735,12 @@ export function KnowledgeLibrary({
                 <div
                   key={dataset.id}
                   className={`group relative rounded-2xl bg-[#140F1D] border transition-all duration-300 flex flex-col justify-between overflow-hidden shadow-xl ${isLocal
-                      ? "border-emerald-500/20 hover:border-emerald-500/50 hover:shadow-emerald-500/5"
-                      : isCollection
-                        ? "border-purple-500/20 hover:border-purple-500/50 hover:shadow-purple-500/5"
-                        : isTextSource
-                          ? "border-amber-500/20 hover:border-amber-500/50 hover:shadow-amber-500/5"
-                          : "border-indigo-500/20 hover:border-indigo-500/50 hover:shadow-indigo-500/5"
+                    ? "border-emerald-500/20 hover:border-emerald-500/50 hover:shadow-emerald-500/5"
+                    : isCollection
+                      ? "border-purple-500/20 hover:border-purple-500/50 hover:shadow-purple-500/5"
+                      : isTextSource
+                        ? "border-amber-500/20 hover:border-amber-500/50 hover:shadow-amber-500/5"
+                        : "border-indigo-500/20 hover:border-indigo-500/50 hover:shadow-indigo-500/5"
                     }`}
                 >
                   <div className="p-5 space-y-4">
@@ -721,12 +749,12 @@ export function KnowledgeLibrary({
                       <div className="flex items-center gap-3">
                         <div
                           className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isLocal
-                              ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                              : isCollection
-                                ? "bg-purple-500/10 text-purple-400 border border-purple-500/20"
-                                : isTextSource
-                                  ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                                  : "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20"
+                            ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                            : isCollection
+                              ? "bg-purple-500/10 text-purple-400 border border-purple-500/20"
+                              : isTextSource
+                                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                                : "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20"
                             }`}
                         >
                           {isLocal ? (
@@ -756,23 +784,22 @@ export function KnowledgeLibrary({
                       {/* Type & Download Status Badges */}
                       <div className="flex flex-col items-end gap-1">
                         <span
-                          className={`text-[9px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap ${
-                            isLocal
+                          className={`text-[9px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap ${isLocal
                               ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/20"
                               : isCollection
-                              ? "bg-purple-500/10 text-purple-300 border-purple-500/20"
-                              : isTextSource
-                              ? "bg-amber-500/10 text-amber-300 border-amber-500/20"
-                              : "bg-indigo-500/10 text-indigo-300 border-indigo-500/20"
-                          }`}
+                                ? "bg-purple-500/10 text-purple-300 border-purple-500/20"
+                                : isTextSource
+                                  ? "bg-amber-500/10 text-amber-300 border-amber-500/20"
+                                  : "bg-indigo-500/10 text-indigo-300 border-indigo-500/20"
+                            }`}
                         >
                           {isLocal
                             ? "⚡ SFT Ready"
                             : isCollection
-                            ? "📚 Vector DB"
-                            : isTextSource
-                            ? "✍️ Pasted Text"
-                            : "🌐 HF Hub"}
+                              ? "📚 Vector DB"
+                              : isTextSource
+                                ? "✍️ Pasted Text"
+                                : "🌐 HF Hub"}
                         </span>
 
                         {dataset.is_downloaded ? (
@@ -842,24 +869,34 @@ export function KnowledgeLibrary({
                   {/* Card Actions Bottom Strip */}
                   <div className="px-5 py-3.5 bg-[#0D0B14] border-t border-white/5 flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
-                      {/* Download Button (Visible if dataset is not downloaded locally) */}
+                      {/* Download Button / Progress Bar (Visible if dataset is not downloaded locally) */}
                       {!dataset.is_downloaded && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDownloadDataset(dataset.id);
-                          }}
-                          disabled={downloadingId === dataset.id}
-                          className="px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 hover:text-amber-200 border border-amber-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
-                          title="Download & cache dataset locally for offline training"
-                        >
-                          {downloadingId === dataset.id ? (
-                            <Loader2 size={13} className="animate-spin" />
-                          ) : (
+                        downloadingId === dataset.id ? (
+                          <div className="flex flex-col gap-1 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 min-w-[130px] animate-in fade-in duration-200">
+                            <div className="flex items-center justify-between text-[9px] font-mono text-amber-300 font-bold">
+                              <span className="truncate max-w-[85px]">{downloadProgressMap[dataset.id]?.task || "Downloading..."}</span>
+                              <span>{downloadProgressMap[dataset.id]?.progress || 10}%</span>
+                            </div>
+                            <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
+                              <div
+                                className="bg-amber-400 h-full transition-all duration-300 rounded-full"
+                                style={{ width: `${downloadProgressMap[dataset.id]?.progress || 10}%` }}
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDownloadDataset(dataset.id);
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 hover:text-amber-200 border border-amber-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                            title="Download & cache dataset locally for offline training"
+                          >
                             <Download size={13} />
-                          )}
-                          <span>{downloadingId === dataset.id ? "Downloading..." : "Download"}</span>
-                        </button>
+                            <span>Download</span>
+                          </button>
+                        )
                       )}
 
                       {/* Sample Preview Button */}
@@ -948,8 +985,8 @@ export function KnowledgeLibrary({
                     setSourceInput("");
                   }}
                   className={`py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${sourceType === tab.type
-                      ? "bg-indigo-500/20 text-indigo-200 border border-indigo-500/30"
-                      : "text-white/40 hover:text-white"
+                    ? "bg-indigo-500/20 text-indigo-200 border border-indigo-500/30"
+                    : "text-white/40 hover:text-white"
                     }`}
                 >
                   {tab.label}
@@ -1020,8 +1057,8 @@ export function KnowledgeLibrary({
             {statusMsg && (
               <div
                 className={`p-3 rounded-xl text-xs font-medium ${statusMsg.type === "success"
-                    ? "bg-emerald-500/10 text-emerald-300 border border-emerald-500/20"
-                    : "bg-rose-500/10 text-rose-300 border border-rose-500/20"
+                  ? "bg-emerald-500/10 text-emerald-300 border border-emerald-500/20"
+                  : "bg-rose-500/10 text-rose-300 border border-rose-500/20"
                   }`}
               >
                 {statusMsg.text}

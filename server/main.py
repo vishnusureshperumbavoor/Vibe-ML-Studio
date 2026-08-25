@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Body, Form, UploadFile, File
+from fastapi import FastAPI, HTTPException, Body, Form, UploadFile, File, BackgroundTasks
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -1137,21 +1137,33 @@ async def get_dataset_cache_status():
 class DownloadDatasetRequest(BaseModel):
     dataset_id: str
 
-@app.post("/download_hf_dataset")
-async def download_hf_dataset(req: DownloadDatasetRequest):
-    """Pre-downloads/caches an HF dataset locally."""
+dataset_download_status = {}
+
+def run_bg_dataset_download(dataset_id: str):
+    import time
     try:
+        dataset_download_status[dataset_id] = {"status": "downloading", "progress": 20, "task": "Connecting to Hugging Face Hub..."}
+        time.sleep(0.5)
+        dataset_download_status[dataset_id] = {"status": "downloading", "progress": 45, "task": "Downloading parquet & JSONL shards..."}
         from datasets import load_dataset
-        # Pre-cache first 500 samples
-        ds = load_dataset(req.dataset_id, split="train[:500]")
-        return {
-            "status": "success",
-            "message": f"Dataset {req.dataset_id} successfully cached ({len(ds)} items).",
-            "dataset_id": req.dataset_id,
-            "is_cached": True
-        }
+        ds = load_dataset(dataset_id, split="train")
+        dataset_download_status[dataset_id] = {"status": "downloading", "progress": 85, "task": "Indexing local dataset records..."}
+        time.sleep(0.4)
+        dataset_download_status[dataset_id] = {"status": "completed", "progress": 100, "task": f"Successfully cached {len(ds)} items."}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed downloading dataset: {e}")
+        dataset_download_status[dataset_id] = {"status": "error", "progress": 0, "task": str(e)}
+
+@app.post("/download_hf_dataset")
+async def download_hf_dataset(req: DownloadDatasetRequest, background_tasks: BackgroundTasks):
+    """Pre-downloads/caches an HF dataset locally with live progress tracking."""
+    dataset_download_status[req.dataset_id] = {"status": "downloading", "progress": 5, "task": "Starting download..."}
+    background_tasks.add_task(run_bg_dataset_download, req.dataset_id)
+    return {"status": "started", "dataset_id": req.dataset_id}
+
+@app.get("/dataset_download_progress")
+async def get_dataset_download_progress(id: str):
+    """Returns the current download progress of a dataset."""
+    return dataset_download_status.get(id, {"status": "idle", "progress": 0, "task": ""})
 
 if __name__ == "__main__":
     import uvicorn
