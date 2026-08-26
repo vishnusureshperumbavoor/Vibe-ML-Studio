@@ -643,14 +643,7 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
               return (
                 <div
                   key={idx}
-                  onClick={() => {
-                    if (isDownloaded) {
-                      setActiveChatModel(model.name);
-                    }
-                  }}
-                  className={`group rounded-3xl bg-[#140F1D] border transition-all duration-300 p-5 pt-4 flex flex-col justify-between space-y-4 relative overflow-hidden shadow-xl hover:shadow-2xl ${
-                    isDownloaded ? "cursor-pointer" : "cursor-default"
-                  } ${
+                  className={`group rounded-3xl bg-[#140F1D] border transition-all duration-300 p-5 pt-4 flex flex-col justify-between space-y-4 relative overflow-hidden shadow-xl hover:shadow-2xl cursor-default ${
                     isLoRA
                       ? "border-amber-500/20 hover:border-amber-500/50 hover:shadow-amber-500/5"
                       : isBase
@@ -820,11 +813,11 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 onClick={(e) => e.stopPropagation()}
-                                className="text-xs font-semibold text-amber-400/90 hover:text-amber-300 hover:underline flex items-center gap-1 transition-all"
+                                className="text-[10px] font-mono text-amber-400/80 hover:text-amber-300 hover:underline flex items-center gap-1.5 transition-all"
                                 title="View model repository on Hugging Face Hub"
                               >
+                                <ExternalLink size={12} className="text-amber-400" />
                                 <span>HF Repo</span>
-                                <ExternalLink size={11} />
                               </a>
                             ) : isLoRA ? (
                               <button
@@ -832,10 +825,10 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
                                   e.stopPropagation();
                                   handleOpenUploadModal(model);
                                 }}
-                                className="text-xs font-semibold text-amber-400/80 hover:text-amber-300 hover:underline flex items-center gap-1 transition-all cursor-pointer"
+                                className="text-[10px] font-mono text-amber-400/80 hover:text-amber-300 hover:underline flex items-center gap-1.5 transition-all cursor-pointer"
                                 title="Push fine-tuned weights to Hugging Face Hub"
                               >
-                                <UploadCloud size={13} />
+                                <UploadCloud size={12} className="text-amber-400" />
                                 <span>Push to HF</span>
                               </button>
                             ) : (model.hf_url || model.repo_id) ? (
@@ -845,11 +838,11 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 onClick={(e) => e.stopPropagation()}
-                                className="text-xs font-semibold text-white/50 hover:text-white hover:underline flex items-center gap-1 transition-all"
+                                className="text-[10px] font-mono text-white/50 hover:text-white/80 hover:underline flex items-center gap-1.5 transition-all"
                                 title="View base model repository on Hugging Face"
                               >
+                                <ExternalLink size={12} className="text-white/60" />
                                 <span>HF Repo</span>
-                                <ExternalLink size={11} />
                               </a>
                             ) : null}
 

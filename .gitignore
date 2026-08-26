@@ -34,11 +34,15 @@ server/venv/
 server/models/
 server/data/
 server/.cache/
+server/bin/
 **/*.gguf
 **/*.safetensors
 **/*.bin
 **/*.nii.gz
 **/*.tar
+**/*.tar.gz
 **/*.zip
+**/*.so
+**/*.so.*
 **/__pycache__/
 python.exe

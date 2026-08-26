@@ -79,6 +79,22 @@ export interface HubRecommendedModel {
 
 export const HUB_RECOMMENDED_MODELS: HubRecommendedModel[] = [
   {
+    id: "vishnusureshperumbavoor/vsp_alpaca-instruct-300ep-v2-vml",
+    filename: "vsp_alpaca-instruct-300ep-v2-instruct-q4_k_m.gguf",
+    name: "VSP Alpaca Instruct (300 Epochs)",
+    display_name: "VSP Alpaca Instruct 300ep V2",
+    repo_id: "vishnusureshperumbavoor/vsp_alpaca-instruct-300ep-v2-vml",
+    type: "base",
+    architecture: "Qwen2 (Instruct Merged)",
+    quantization: "Q4_K_M",
+    parameters: "0.5B",
+    size_mb: 379,
+    context_length: "32K",
+    description: "Fine-tuned 300-epoch Alpaca Instruct model merged with Qwen2-0.5B-Instruct foundation. Optimized for edge and local browser/CPU inference.",
+    hf_url: "https://huggingface.co/vishnusureshperumbavoor/vsp_alpaca-instruct-300ep-v2-vml/resolve/main/vsp_alpaca-instruct-300ep-v2-instruct-q4_k_m.gguf",
+    tags: ["Fine-Tuned", "Instruct", "Q4_K_M", "Edge Ready"],
+  },
+  {
     id: "Qwen/Qwen2-0.5B-Instruct-GGUF",
     filename: "qwen2-0_5b-instruct-q4_k_m.gguf",
     name: "Qwen2 0.5B Instruct",
