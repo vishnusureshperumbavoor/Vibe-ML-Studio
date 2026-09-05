@@ -6,7 +6,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, "..");
 
-const service = process.argv[2];
+const service = process.argv.find((arg) => ["server", "mcp", "client"].includes(arg));
 const shouldInstall = process.argv.includes("--install");
 
 const config = {
