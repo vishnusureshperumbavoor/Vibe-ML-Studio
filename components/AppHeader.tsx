@@ -9,11 +9,13 @@ import {
   Cpu,
   LayoutGrid,
   Square,
+  Swords,
 } from "lucide-react";
 import { Button } from "./Button";
 import { TrainingProgress } from "../hooks/useWorkflows";
 
 export type TopLevelView =
+  | "arena"
   | "knowledge"
   | "workflow"
   | "gallery"
@@ -138,6 +140,20 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
       <div className="flex items-center gap-2">
         {/* View Switcher */}
         <div className="flex bg-[#0B090F] p-1 rounded-xl border border-[#352554] mr-2 gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setActiveView("arena")}
+            className={`gap-2 h-10 px-3.5 rounded-xl transition-all duration-300 border ${
+              activeView === "arena" || activeView === "chat"
+                ? "bg-purple-500/20 text-purple-200 border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.15)]"
+                : "text-gray-400 border-transparent hover:bg-white/5"
+            }`}
+          >
+            <Swords size={16} />
+            <span className="text-xs font-semibold">Arena</span>
+          </Button>
+
           <Button
             variant="ghost"
             size="sm"

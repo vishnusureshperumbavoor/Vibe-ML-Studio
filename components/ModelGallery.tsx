@@ -889,7 +889,7 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
                             ) : (
                               <>
                                 <Download size={13} />
-                                <span>Download & Test</span>
+                                <span>Download</span>
                               </>
                             )}
                           </button>

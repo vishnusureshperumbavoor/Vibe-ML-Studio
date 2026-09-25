@@ -83,7 +83,7 @@ const renderMessageList = (
           className={`max-w-4xl mx-auto px-6 space-y-10 ${messages.length === 0 ? "h-full flex items-center justify-center" : "py-12"}`}
         >
           {!hasModels ? (
-            <div className="flex flex-col items-center justify-center text-center space-y-6 max-w-2xl mx-auto p-8 rounded-3xl bg-gradient-to-b from-[#140F1D] to-[#0B090F] border border-purple-500/20 shadow-2xl animate-in fade-in duration-500">
+            <div className="flex flex-col items-center justify-center text-center space-y-6 max-w-6xl mx-auto p-8 rounded-3xl bg-gradient-to-b from-[#140F1D] to-[#0B090F] border border-purple-500/20 shadow-2xl animate-in fade-in duration-500">
               <div className="p-4 bg-purple-500/10 border border-purple-500/30 rounded-2xl text-purple-400 shadow-lg shadow-purple-500/10">
                 <Bot size={36} />
               </div>
@@ -97,7 +97,7 @@ const renderMessageList = (
               </div>
 
               {/* Starter Models Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full text-left pt-2">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full text-left pt-2">
                 {starterModels.map((item) => {
                   const m = item.model;
                   const isDownloading = item.status === "downloading";
@@ -191,7 +191,7 @@ const renderMessageList = (
                             ) : (
                               <>
                                 <Download size={14} />
-                                <span>Download & Test (~{m.size_mb} MB)</span>
+                                <span>Download (~{m.size_mb} MB)</span>
                               </>
                             )}
                           </button>
@@ -390,8 +390,6 @@ interface ModelSelectorProps {
   isSending: boolean;
   onnxStatus: Record<string, { status: "idle" | "downloading" | "ready"; progress: number }>;
   onDownloadOnnx: (model: VMLModel) => void;
-  downloadStates: Record<string, { status: string; progress: number; message: string }>;
-  onDownloadStarterModel: (repo_id: string, filename: string) => void;
 }
 
 const ModelSelector: React.FC<ModelSelectorProps> = ({
@@ -401,8 +399,6 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
   isSending,
   onnxStatus,
   onDownloadOnnx,
-  downloadStates,
-  onDownloadStarterModel,
 }) => {
   const selectedObj = allModels.find((m) => m.name === val);
   const isOnnx = selectedObj?.source === "onnx";
@@ -438,43 +434,6 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
         </div>
       </div>
 
-      {/* Quick Download Buttons for Starter Models not yet downloaded locally */}
-      {HUB_RECOMMENDED_MODELS.filter(
-        (rec) =>
-          !allModels.some(
-            (m) =>
-              m.name.toLowerCase() === rec.filename.toLowerCase() ||
-              m.name.toLowerCase().includes(rec.filename.toLowerCase().replace(".gguf", ""))
-          )
-      ).map((rec) => {
-        const dState = downloadStates[rec.filename];
-        const isDownloading = dState?.status === "downloading";
-        return (
-          <button
-            key={rec.filename}
-            onClick={() => onDownloadStarterModel(rec.repo_id, rec.filename)}
-            disabled={isDownloading}
-            className={`h-9 flex items-center gap-1.5 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer disabled:opacity-50 whitespace-nowrap shadow-sm hover:scale-105 active:scale-95 ${
-              rec.architecture.includes("Bonsai")
-                ? "bg-cyan-600/20 border-cyan-500/30 text-cyan-300 hover:bg-cyan-600/30"
-                : "bg-purple-600/20 border-purple-500/30 text-purple-300 hover:bg-purple-600/30"
-            }`}
-            title={`Download & Test ${rec.display_name}`}
-          >
-            {isDownloading ? (
-              <>
-                <Loader2 size={12} className="animate-spin" />
-                <span>Downloading ({dState?.progress || 0}%)...</span>
-              </>
-            ) : (
-              <>
-                <Download size={12} />
-                <span>Get {rec.display_name.split(" ")[0]} {rec.parameters} (~{rec.size_mb} MB)</span>
-              </>
-            )}
-          </button>
-        );
-      })}
 
       {isOnnx && selectedObj && (
         <div className="flex items-center gap-2">
@@ -1052,8 +1011,6 @@ ${assistantMsg.content}`;
             isSending={isSending}
             onnxStatus={onnxStatus}
             onDownloadOnnx={handleDownloadOnnx}
-            downloadStates={downloadStates}
-            onDownloadStarterModel={handleDownloadStarterModel}
           />
 
           <Button
@@ -1074,8 +1031,6 @@ ${assistantMsg.content}`;
               isSending={isSending}
               onnxStatus={onnxStatus}
               onDownloadOnnx={handleDownloadOnnx}
-              downloadStates={downloadStates}
-              onDownloadStarterModel={handleDownloadStarterModel}
             />
           )}
         </div>

@@ -9,6 +9,7 @@ import { ModelGallery } from "./components/ModelGallery";
 import { QuantizationPanel } from "./components/QuantizationPanel";
 import { BenchmarkPanel } from "./components/BenchmarkPanel";
 import { OnnxPanel } from "./components/OnnxPanel";
+import { ChatView } from "./components/ChatView";
 import { useNotebook } from "./hooks/useNotebook";
 import { useSkillsAndConnectors } from "./hooks/useSkillsAndConnectors";
 import { useDistillation } from "./hooks/useDistillation";
@@ -17,7 +18,7 @@ import { fetchSystemSpecs } from "./utils/apiUtils";
 import { interruptExecution } from "./services/aiService";
 
 export default function App() {
-  const [activeView, setActiveView] = useState<TopLevelView>("gallery");
+  const [activeView, setActiveView] = useState<TopLevelView>("arena");
   const [chatSelectedModel, setChatSelectedModel] = useState<string>("");
   const [systemInfo, setSystemInfo] = useState<any>(null);
 
@@ -147,7 +148,7 @@ export default function App() {
 
   const handleOpenChat = (modelId?: string) => {
     if (modelId) setChatSelectedModel(modelId);
-    setActiveView("gallery");
+    setActiveView("arena");
   };
 
   return (
@@ -179,7 +180,12 @@ export default function App() {
 
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden relative w-full">
-        {activeView === "gallery" ? (
+        {activeView === "arena" || activeView === "chat" ? (
+          <ChatView
+            selectedModel={chatSelectedModel}
+            onModelChange={setChatSelectedModel}
+          />
+        ) : activeView === "gallery" ? (
           <ModelGallery
             initialSelectedModel={chatSelectedModel}
             onNavigateToBuild={() => {

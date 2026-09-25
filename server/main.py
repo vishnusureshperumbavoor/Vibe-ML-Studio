@@ -467,10 +467,6 @@ def _gguf_download_worker(repo_id: str, filename: str):
             
         url = f"https://huggingface.co/{repo_id}/resolve/main/{filename}"
         headers = {}
-        hf_token = os.getenv("HF_TOKEN")
-        if hf_token:
-            headers["Authorization"] = f"Bearer {hf_token}"
-            
         print(f"📥 Starting streaming download: {url} -> {target_path}")
         response = requests.get(url, headers=headers, stream=True, timeout=60, allow_redirects=True)
         response.raise_for_status()
