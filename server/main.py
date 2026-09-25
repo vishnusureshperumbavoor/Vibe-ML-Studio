@@ -46,6 +46,10 @@ for d in [MODELS_PARENT, MODELS_DIR, GGUF_DIR, ADAPTERS_DIR, ONNX_DIR, DATASETS_
     if not os.path.exists(d):
         os.makedirs(d, exist_ok=True)
 
+# File format and download constants
+SUPPORTED_MODEL_EXTENSIONS = (".gguf", ".safetensors", ".bin", ".pt", ".pth", ".onnx")
+DOWNLOADING_FILE_SUFFIX = ".downloading"
+
 # Allow the React frontend to communicate with this backend
 app.add_middleware(
     CORSMiddleware,
@@ -459,7 +463,7 @@ _gguf_download_lock = threading.Lock()
 
 def _gguf_download_worker(repo_id: str, filename: str):
     global gguf_download_state
-    temp_path = os.path.join(GGUF_DIR, f"{filename}.downloading")
+    temp_path = os.path.join(GGUF_DIR, f"{filename}{DOWNLOADING_FILE_SUFFIX}")
     target_path = os.path.join(GGUF_DIR, filename)
     try:
         if not os.path.exists(GGUF_DIR):
@@ -572,38 +576,51 @@ async def list_native_models():
     """
     results = []
     
-    # 1. Base Models (.gguf) in server/models/gguf
+    # 1. Base Models in server/models/gguf
     if os.path.exists(GGUF_DIR):
         for f in os.listdir(GGUF_DIR):
-            if f.lower().endswith(".gguf"):
+            if any(f.lower().endswith(ext) for ext in SUPPORTED_MODEL_EXTENSIONS) and not f.endswith(DOWNLOADING_FILE_SUFFIX):
                 file_path = os.path.join(GGUF_DIR, f)
                 size_mb = round(os.path.getsize(file_path) / (1024 * 1024), 1) if os.path.isfile(file_path) else 0
                 mtime = os.path.getmtime(file_path)
                 
                 # Extract quantization and size tags
                 quant = "Q4_K_M"
-                if "q8_0" in f.lower(): quant = "Q8_0"
+                if "safetensors" in f.lower(): quant = "PyTorch / Safetensors"
+                elif "q8_0" in f.lower(): quant = "Q8_0"
                 elif "q4_k" in f.lower(): quant = "Q4_K_M"
                 elif "q5" in f.lower(): quant = "Q5_K_M"
                 elif "q1_0" in f.lower() or "1bit" in f.lower() or "1-bit" in f.lower(): quant = "Q1_0 (1-bit)"
                 
                 params = "0.5B"
-                if "0.5b" in f.lower() or "0_5b" in f.lower(): params = "0.5B"
+                if "421m" in f.lower() or "laya" in f.lower() or f.lower() == "model.safetensors": params = "421M"
+                elif "0.5b" in f.lower() or "0_5b" in f.lower(): params = "0.5B"
                 elif "1.7b" in f.lower() or "1_7b" in f.lower(): params = "1.7B"
                 elif "1.5b" in f.lower() or "1_5b" in f.lower(): params = "1.5B"
                 elif "7b" in f.lower(): params = "7B"
                 
                 arch = "Qwen2"
-                if "bonsai" in f.lower():
+                if "laya" in f.lower() or f.lower() == "model.safetensors":
+                    arch = "ModernBERT (System 1)"
+                elif "bonsai" in f.lower():
                     arch = "Bonsai (1-bit)"
                 elif "qwen" in f.lower():
                     arch = "Qwen2"
                 elif "llama" in f.lower():
                     arch = "Llama"
                 
+                disp_name = f
+                for ext in SUPPORTED_MODEL_EXTENSIONS:
+                    disp_name = disp_name.replace(ext, '').replace(ext.upper(), '')
+                disp_name = disp_name.replace('-', ' ').replace('_', ' ').title()
+
                 base_hf_url = "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct"
                 base_repo_id = "Qwen/Qwen2-0.5B-Instruct"
-                if "bonsai" in f.lower():
+                if "laya" in f.lower() or f.lower() == "model.safetensors":
+                    disp_name = "Laya 421M System 1"
+                    base_hf_url = "https://huggingface.co/convaiinnovations/laya"
+                    base_repo_id = "convaiinnovations/laya"
+                elif "bonsai" in f.lower():
                     base_hf_url = "https://huggingface.co/prism-ml/Bonsai-1.7B-unpacked"
                     base_repo_id = "prism-ml/Bonsai-1.7B-unpacked"
                 elif "smollm" in f.lower():
@@ -615,7 +632,7 @@ async def list_native_models():
                 
                 results.append({
                     "name": f,
-                    "display_name": f.replace('.gguf', '').replace('-', ' ').title(),
+                    "display_name": disp_name,
                     "source": "native",
                     "type": "base",
                     "size_mb": size_mb,
@@ -623,7 +640,7 @@ async def list_native_models():
                     "quantization": quant,
                     "parameters": params,
                     "architecture": arch,
-                    "description": "Base quantized instruction-tuned model for local inference.",
+                    "description": "System 1 decision engine / local model for fast inference.",
                     "hf_url": base_hf_url,
                     "repo_id": base_repo_id
                 })

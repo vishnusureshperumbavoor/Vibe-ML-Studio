@@ -127,10 +127,6 @@ const renderMessageList = (
                           >
                             {isReady ? "Ready Locally" : m.quantization}
                           </span>
-
-                          <span className="text-[11px] font-mono text-amber-400 font-bold">
-                            ~{m.size_mb} MB
-                          </span>
                         </div>
 
                         <div>
@@ -419,7 +415,7 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({
           {allModels.length > 0 ? (
             allModels.map((m) => (
               <option key={`${m.source}-${m.name}`} value={m.name}>
-                {m.name.toUpperCase()}{" "}
+                {(m.display_name || m.name).toUpperCase()}{" "}
                 {m.details?.parameter_size
                   ? `• ${m.details.parameter_size}`
                   : ""}
