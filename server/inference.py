@@ -119,12 +119,12 @@ class NativeInferenceManager:
         if Llama is None:
             raise ImportError("llama-cpp-python not installed yet.")
 
-        # Initialize Llama.cpp engine with expanded context for RAG
+        # Initialize Llama.cpp engine with optimized context and thread count
         model_instance = Llama(
             model_path=model_path,
             lora_path=resolved_lora,
             n_ctx=DEFAULT_CONTEXT_LENGTH,
-            n_threads=os.cpu_count() or 4,
+            n_threads=min(4, os.cpu_count() or 4),
             n_gpu_layers=0,
             verbose=False
         )
@@ -133,7 +133,7 @@ class NativeInferenceManager:
         self.locks[cache_key] = threading.Lock()
         return model_instance
 
-    def chat_stream(self, model_filename: str, lora_path: str, messages: List[Dict]):
+    def chat_stream(self, model_filename: str, lora_path: str, messages: List[Dict], system1_mode: bool = False):
         model_path = self._resolve_model_path(model_filename)
         resolved_lora = self._resolve_lora_path(lora_path)
         
@@ -215,6 +215,21 @@ class NativeInferenceManager:
 
         # Standard ChatML Template
         prompt = ""
+        has_system = any(m.get('role') == 'system' for m in messages)
+        if system1_mode and not has_system:
+            prompt += (
+                "<|im_start|>system\n"
+                "You are operating as a System 1 Fast Decision & Tool Call Router. "
+                "Formulate your output immediately as a valid JSON object matching this schema:\n"
+                "{\n"
+                '  "decision": "<INTENT_OR_CLASSIFICATION>",\n'
+                '  "confidence": 0.95,\n'
+                '  "tool_call": {"name": "<TOOL_NAME_OR_NONE>", "arguments": {}},\n'
+                '  "response": "<DIRECT_SHORT_ANSWER>"\n'
+                "}\n"
+                "Output ONLY valid JSON without markdown codeblocks or conversational preamble.<|im_end|>\n"
+            )
+
         for msg in messages:
             role = msg['role']
             content = msg['content']
@@ -229,11 +244,13 @@ class NativeInferenceManager:
         t_first_token = None
         token_count = 0
 
+        max_gen_tokens = 96 if system1_mode else 1024
+
         # Lock this specific model for thread-safe inference
         with lock:
             stream = model(
                 prompt,
-                max_tokens=1024,
+                max_tokens=max_gen_tokens,
                 stop=["<|im_end|>", "<|endoftext|>"],
                 stream=True
             )
@@ -259,12 +276,13 @@ class NativeInferenceManager:
                         "tps": round(tps, 2)
                     }
 
-    def chat(self, model_filename: str, lora_path: str, messages: List[Dict]) -> str:
+    def chat(self, model_filename: str, lora_path: str, messages: List[Dict], system1_mode: bool = False) -> str:
         """Synchronous chat method for benchmarking and programmatic access."""
         output = ""
-        for chunk in self.chat_stream(model_filename, lora_path, messages):
+        for chunk in self.chat_stream(model_filename, lora_path, messages, system1_mode=system1_mode):
             output += chunk.get("content", "")
         return output
+
 
 # Singleton instance
 base_dir = os.path.dirname(os.path.abspath(__file__))

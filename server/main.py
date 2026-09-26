@@ -79,6 +79,7 @@ class NativeChatRequest(BaseModel):
     model_filename: str
     messages: List[dict]
     lora_slug: Optional[str] = None
+    system1_mode: Optional[bool] = False
 
 class DeleteModelRequest(BaseModel):
     name: str
@@ -429,7 +430,7 @@ async def native_chat(req: NativeChatRequest):
             native_manager.load_model(req.model_filename, lora_path)
             
             # 3. Stream tokens (Thread-safe)
-            for chunk in native_manager.chat_stream(req.model_filename, lora_path, req.messages):
+            for chunk in native_manager.chat_stream(req.model_filename, lora_path, req.messages, system1_mode=req.system1_mode or False):
                 # chunk is now {"content": "...", "ttft": ..., "tps": ...}
                 payload = {
                     "content": chunk["content"],

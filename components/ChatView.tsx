@@ -17,6 +17,8 @@ import {
   Copy,
   CloudDownload,
   Cpu,
+  Zap,
+  Gauge,
 } from "lucide-react";
 import { onnxService } from "../services/onnxInferenceService";
 import { Button } from "./Button";
@@ -27,6 +29,7 @@ interface Message {
   role: "user" | "assistant" | "system";
   content: string;
   reasoning?: string;
+  isSystem1?: boolean;
   stats?: {
     ttft: number;
     tps: number;
@@ -336,20 +339,30 @@ const renderMessageList = (
                           )}
                         </div>
 
-                        {isAssistant && msg.stats && (
-                          <div className="mt-4 pt-3 border-t border-purple-500/10 flex items-center gap-4 text-[10px] font-medium tracking-wider uppercase">
-                            <div className="flex items-center gap-1.5 text-purple-400/70">
-                              <Clock size={10} />
-                              <span>
-                                TTFT: {Math.round(msg.stats.ttft)}ms
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-1.5 text-indigo-400/70">
-                              <Activity size={10} />
-                              <span>
-                                Speed: {msg.stats.tps} t/s
-                              </span>
-                            </div>
+                        {isAssistant && (msg.stats || msg.isSystem1) && (
+                          <div className="mt-4 pt-3 border-t border-purple-500/10 flex items-center gap-4 text-[10px] font-medium tracking-wider uppercase flex-wrap">
+                            {msg.isSystem1 && (
+                              <div className="flex items-center gap-1.5 text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-md font-bold shadow-sm">
+                                <Zap size={10} className="fill-amber-400 animate-pulse" />
+                                <span>System 1 (Fast Decision)</span>
+                              </div>
+                            )}
+                            {msg.stats && (
+                              <>
+                                <div className="flex items-center gap-1.5 text-purple-400/70">
+                                  <Clock size={10} />
+                                  <span>
+                                    TTFT: {Math.round(msg.stats.ttft)}ms
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1.5 text-indigo-400/70">
+                                  <Activity size={10} />
+                                  <span>
+                                    Speed: {msg.stats.tps} t/s
+                                  </span>
+                                </div>
+                              </>
+                            )}
                           </div>
                         )}
                       </div>
@@ -475,6 +488,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   onModelChange,
 }) => {
   const [isSplitMode, setIsSplitMode] = useState(false);
+  const [isSystem1Mode, setIsSystem1Mode] = useState(false);
   const [selectedModel2, setSelectedModel2] = useState("");
   const [nativeModels, setNativeModels] = useState<VMLModel[]>([]);
   const allModels = nativeModels;
@@ -609,27 +623,38 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const handleCopyLatestReport = () => {
     if (messagesA.length < 2) return;
 
-    // Find the latest assistant message
-    const lastAssistantIdx = [...messagesA]
+    // Find latest assistant message in Column A
+    const lastAssistantIdxA = [...messagesA]
       .reverse()
       .findIndex((m) => m.role === "assistant");
-    if (lastAssistantIdx === -1) return;
+    if (lastAssistantIdxA === -1) return;
 
-    const actualIdx = messagesA.length - 1 - lastAssistantIdx;
-    const assistantMsg = messagesA[actualIdx];
-    const userMsg =
-      actualIdx > 0 ? messagesA[actualIdx - 1] : { content: "Unknown" };
+    const actualIdxA = messagesA.length - 1 - lastAssistantIdxA;
+    const assistantMsgA = messagesA[actualIdxA];
+    const userMsgA =
+      actualIdxA > 0 ? messagesA[actualIdxA - 1] : { content: "Unknown" };
 
-    const report = `[VML Model Diagnostic Report]
+    let report = `[VML Model Diagnostic Report - Model A]
 Model: ${selectedModel}
-TTFT: ${Math.round(assistantMsg.stats?.ttft || 0)}ms
-Speed: ${assistantMsg.stats?.tps || 0} t/s
+TTFT: ${Math.round(assistantMsgA.stats?.ttft || 0)}ms
+Speed: ${assistantMsgA.stats?.tps || 0} t/s
 
 --- USER QUERY ---
-${userMsg.content}
+${userMsgA.content}
 
 --- AI RESPONSE ---
-${assistantMsg.content}`;
+${assistantMsgA.content}`;
+
+    if (isSplitMode && messagesB.length >= 2) {
+      const lastAssistantIdxB = [...messagesB]
+        .reverse()
+        .findIndex((m) => m.role === "assistant");
+      if (lastAssistantIdxB !== -1) {
+        const actualIdxB = messagesB.length - 1 - lastAssistantIdxB;
+        const assistantMsgB = messagesB[actualIdxB];
+        report += `\n\n========================================\n[VML Model Diagnostic Report - Model B]\nModel: ${selectedModel2}\nTTFT: ${Math.round(assistantMsgB.stats?.ttft || 0)}ms\nSpeed: ${assistantMsgB.stats?.tps || 0} t/s\n\n--- AI RESPONSE ---\n${assistantMsgB.content}`;
+      }
+    }
 
     navigator.clipboard.writeText(report);
     setReportCopied(true);
@@ -734,6 +759,7 @@ ${assistantMsg.content}`;
           : baseGguf,
       messages: history,
       lora_slug: modelObj?.lora_slug,
+      system1_mode: isSystem1Mode,
     };
 
     try {
@@ -751,7 +777,7 @@ ${assistantMsg.content}`;
 
       setMsg((prev) => [
         ...prev,
-        { role: "assistant", content: "", reasoning: "" },
+        { role: "assistant", content: "", reasoning: "", isSystem1: isSystem1Mode },
       ]);
 
       while (true) {
@@ -1032,6 +1058,18 @@ ${assistantMsg.content}`;
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsSystem1Mode(!isSystem1Mode)}
+            title={isSystem1Mode ? "disable system 1 mode" : "enable system 1 mode"}
+            className={`p-2 rounded-lg transition-all ${
+              isSystem1Mode
+                ? "bg-purple-500/20 text-purple-300 border border-purple-500/30 font-bold"
+                : "text-gray-400 hover:text-purple-400 hover:bg-purple-500/10"
+            }`}
+          >
+            <Gauge size={16} />
+          </button>
+
           <button
             onClick={handleCopyLatestReport}
             disabled={messagesA.length < 2}

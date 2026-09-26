@@ -207,7 +207,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
             }`}
           >
             <BarChart2 size={16} />
-            <span className="text-xs font-semibold">Evaluation</span>
+            <span className="text-xs font-semibold">Evaluate</span>
           </Button>
 
           <Button
