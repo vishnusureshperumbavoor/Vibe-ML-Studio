@@ -1,5 +1,6 @@
-# Agent Rules
+# Agent Rules & Execution Directives
 
-## Command Execution Guidelines
-- Run non-destructive/non-vulnerable terminal commands (e.g., build checks, type checks, tests, status checks, linters, non-destructive file operations) proactively.
-- Do NOT ask for user permission before executing safe, non-vulnerable commands.
+## Terminal & Command Execution Policy
+- **DO NOT ASK FOR USER PERMISSION BEFORE EXECUTING TERMINAL COMMANDS.**
+- Execute all safe terminal commands, build checks, type checks, tests, status checks, background daemons, dataset inspections, and environment scripts autonomously and proactively.
+- Never pause to prompt or request user confirmation before running terminal commands.

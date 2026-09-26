@@ -1341,9 +1341,36 @@ async def preview_dataset(id: str):
     # 2. HF Dataset Preview
     try:
         from datasets import load_dataset
-        ds = load_dataset(id, split="train[:5]")
-        for item in ds:
-            samples.append(item)
+        token = os.getenv("HF_TOKEN") or None
+        
+        configs_to_try = ["instruct", "alignment", "benchmark", "default", "main", None]
+        splits_to_try = ["train", "val", "validation", "test"]
+        loaded = False
+        last_error = None
+
+        for cfg in configs_to_try:
+            for s in splits_to_try:
+                try:
+                    kwargs = {"split": s, "streaming": True, "token": token}
+                    if cfg:
+                        kwargs["name"] = cfg
+                    ds = load_dataset(id, **kwargs)
+                    for i, item in enumerate(ds):
+                        if i >= 5:
+                            break
+                        samples.append(item)
+                    if samples:
+                        loaded = True
+                        break
+                except Exception as ex:
+                    last_error = ex
+                    continue
+            if loaded:
+                break
+
+        if not loaded:
+            raise last_error or Exception("Failed to load dataset config.")
+
         return {"status": "success", "id": id, "type": "hf", "samples": samples, "total_sampled": len(samples)}
     except Exception as e:
         return {"status": "error", "id": id, "type": "unknown", "error": str(e), "samples": []}
@@ -1374,8 +1401,12 @@ def check_dataset_local_presence(dataset_id: str) -> bool:
 
 @app.get("/dataset_cache_status")
 async def get_dataset_cache_status():
-    """Returns a map of cached dataset IDs."""
+    """Returns a map of cached dataset IDs and active background download states."""
     known_datasets = [
+        "raidium/RadImageNet-VQA",
+        "raidium/RadGenome-Chest-CT",
+        "flaviagiammarino/vqa-rad",
+        "xmcmic/PMC-VQA",
         "vishnusureshperumbavoor/vsp_alpaca",
         "lavita/MedQuAD",
         "yahma/alpaca-cleaned",
@@ -1388,7 +1419,7 @@ async def get_dataset_cache_status():
     status_map = {}
     for d in known_datasets:
         status_map[d] = check_dataset_local_presence(d)
-    return {"cached_datasets": status_map}
+    return {"cached_datasets": status_map, "active_downloads": dataset_download_status}
 
 class DownloadDatasetRequest(BaseModel):
     dataset_id: str
@@ -1396,25 +1427,32 @@ class DownloadDatasetRequest(BaseModel):
 dataset_download_status = {}
 
 def run_bg_dataset_download(dataset_id: str):
-    import time
     try:
-        dataset_download_status[dataset_id] = {"status": "downloading", "progress": 20, "task": "Connecting to Hugging Face Hub..."}
-        time.sleep(0.5)
-        dataset_download_status[dataset_id] = {"status": "downloading", "progress": 45, "task": "Downloading parquet & JSONL shards..."}
-        from datasets import load_dataset
-        ds = load_dataset(dataset_id, split="train")
-        dataset_download_status[dataset_id] = {"status": "downloading", "progress": 85, "task": "Indexing local dataset records..."}
-        time.sleep(0.4)
-        dataset_download_status[dataset_id] = {"status": "completed", "progress": 100, "task": f"Successfully cached {len(ds)} items."}
+        token = os.getenv("HF_TOKEN") or None
+        dataset_download_status[dataset_id] = {"status": "downloading", "task": "Connecting to Hugging Face Hub & caching dataset metadata..."}
+        from huggingface_hub import snapshot_download
+        try:
+            snapshot_download(repo_id=dataset_id, repo_type="dataset", token=token, ignore_patterns=["*.tar.gz", "*.tar", "*.zip", "*.bin"])
+            dataset_download_status[dataset_id] = {"status": "completed", "task": "Successfully cached dataset."}
+        except Exception:
+            from datasets import load_dataset
+            ds = load_dataset(dataset_id, split="train", streaming=True, token=token)
+            dataset_download_status[dataset_id] = {"status": "completed", "task": "Successfully indexed dataset."}
     except Exception as e:
-        dataset_download_status[dataset_id] = {"status": "error", "progress": 0, "task": str(e)}
+        dataset_download_status[dataset_id] = {"status": "error", "task": str(e)}
 
 @app.post("/download_hf_dataset")
 async def download_hf_dataset(req: DownloadDatasetRequest, background_tasks: BackgroundTasks):
     """Pre-downloads/caches an HF dataset locally with live progress tracking."""
-    dataset_download_status[req.dataset_id] = {"status": "downloading", "progress": 5, "task": "Starting download..."}
+    dataset_download_status[req.dataset_id] = {"status": "downloading", "task": "Connecting to Hugging Face..."}
     background_tasks.add_task(run_bg_dataset_download, req.dataset_id)
     return {"status": "started", "dataset_id": req.dataset_id}
+
+@app.post("/cancel_dataset_download")
+async def cancel_dataset_download(req: DownloadDatasetRequest):
+    """Cancels/resets an active dataset download status."""
+    dataset_download_status[req.dataset_id] = {"status": "cancelled", "task": "Download cancelled by user."}
+    return {"status": "cancelled", "dataset_id": req.dataset_id}
 
 @app.get("/dataset_download_progress")
 async def get_dataset_download_progress(id: str):

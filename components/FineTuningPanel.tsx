@@ -65,6 +65,7 @@ export const FineTuningPanel: React.FC<FineTuningPanelProps> = ({
 
   const RECOMMENDED_DATASETS = [
     { id: 'vishnusureshperumbavoor/vsp_alpaca', downloads: 15, likes: 5 },
+    { id: 'raidium/RadImageNet-VQA', downloads: 14200, likes: 450 },
     { id: 'lavita/MedQuAD', downloads: 85000, likes: 320 },
     { id: 'tatsu-lab/alpaca', downloads: 450000, likes: 1200 },
     { id: 'yahma/alpaca-cleaned', downloads: 220000, likes: 850 },

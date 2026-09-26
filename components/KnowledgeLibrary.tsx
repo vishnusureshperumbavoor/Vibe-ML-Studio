@@ -24,6 +24,8 @@ import {
   CloudDownload,
   Check,
 } from "lucide-react";
+import { HuggingFaceAuth } from "./HuggingFaceAuth";
+import { API_BASE } from "../constants";
 
 export interface DatasetCardItem {
   id: string;
@@ -54,6 +56,54 @@ const HUB_RECOMMENDED_DATASETS: DatasetCardItem[] = [
     downloads: 12,
     likes: 5,
     hf_url: "https://huggingface.co/datasets/vishnusureshperumbavoor/vsp_alpaca",
+  },
+  {
+    id: "raidium/RadImageNet-VQA",
+    display_name: "RadImageNet-VQA (CT/MRI Q&A)",
+    type: "hub",
+    domain: "CT & MRI Medical VQA",
+    description: "7.5 Million question-answer pairs generated across CT and MRI scans for diagnostic Q&A, abnormality identification, and triage.",
+    pairs_count: "7.5M Q&A Pairs",
+    size_kb: 280000,
+    downloads: 14200,
+    likes: 450,
+    hf_url: "https://huggingface.co/datasets/raidium/RadImageNet-VQA",
+  },
+  {
+    id: "raidium/RadGenome-Chest-CT",
+    display_name: "RadGenome Chest CT (Reports)",
+    type: "hub",
+    domain: "Chest CT & Radiology Reports",
+    description: "Detailed, grounded 3D chest CT radiology reports linking sentences directly to anatomical regions and pathological findings.",
+    pairs_count: "Grounded Reports",
+    size_kb: 195000,
+    downloads: 8900,
+    likes: 310,
+    hf_url: "https://huggingface.co/datasets/raidium/RadGenome-Chest-CT",
+  },
+  {
+    id: "flaviagiammarino/vqa-rad",
+    display_name: "VQA-RAD (Clinical Reasoning)",
+    type: "hub",
+    domain: "CT, MRI & Radiologist VQA",
+    description: "Open-ended and closed clinical questions authored directly by practicing radiologists across CT, MRI, and X-ray modalities.",
+    pairs_count: "Radiologist QA Pairs",
+    size_kb: 42000,
+    downloads: 31500,
+    likes: 520,
+    hf_url: "https://huggingface.co/datasets/flaviagiammarino/vqa-rad",
+  },
+  {
+    id: "xmcmic/PMC-VQA",
+    display_name: "PMC-VQA (Multi-Modal Medical QA)",
+    type: "hub",
+    domain: "Multi-Modal Medical VQA",
+    description: "227,000 clinical question-answer pairs extracted from PubMed Central radiology papers covering CT, MRI, PET, and Ultrasound.",
+    pairs_count: "227k Medical QA",
+    size_kb: 110000,
+    downloads: 24100,
+    likes: 410,
+    hf_url: "https://huggingface.co/datasets/xmcmic/PMC-VQA",
   },
   {
     id: "lavita/MedQuAD",
@@ -163,6 +213,7 @@ export function KnowledgeLibrary({
   // Preview Modal State
   const [previewDataset, setPreviewDataset] = useState<DatasetCardItem | null>(null);
   const [previewSamples, setPreviewSamples] = useState<any[]>([]);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
@@ -180,12 +231,52 @@ export function KnowledgeLibrary({
     setIsLoading(false);
   };
 
+  const startPollingProgress = (datasetId: string) => {
+    const pollInterval = setInterval(async () => {
+      try {
+        const pRes = await fetch(
+          `${API_BASE}/dataset_download_progress?id=${encodeURIComponent(datasetId)}`
+        );
+        const pData = await pRes.json();
+        if (pData.task) {
+          setDownloadProgressMap((prev) => ({
+            ...prev,
+            [datasetId]: { progress: 50, task: pData.task || "Downloading..." },
+          }));
+        }
+        if (pData.status === "completed") {
+          clearInterval(pollInterval);
+          setCachedMap((prev) => ({ ...prev, [datasetId]: true }));
+          setDownloadingId(null);
+        } else if (pData.status === "error") {
+          clearInterval(pollInterval);
+          setDownloadingId(null);
+        }
+      } catch (err) {
+        clearInterval(pollInterval);
+        setDownloadingId(null);
+      }
+    }, 1000);
+  };
+
   const fetchCacheStatus = async () => {
     try {
-      const resp = await fetch("http://127.0.0.1:2000/dataset_cache_status");
+      const resp = await fetch(`${API_BASE}/dataset_cache_status`);
       const data = await resp.json();
       if (data.cached_datasets) {
         setCachedMap(data.cached_datasets);
+      }
+      if (data.active_downloads) {
+        for (const [id, st] of Object.entries<any>(data.active_downloads)) {
+          if (st.status === "downloading") {
+            setDownloadingId(id);
+            setDownloadProgressMap((prev) => ({
+              ...prev,
+              [id]: { progress: 50, task: st.task || "Downloading..." },
+            }));
+            startPollingProgress(id);
+          }
+        }
       }
     } catch (e) {
       console.error("Failed fetching cache status:", e);
@@ -200,40 +291,34 @@ export function KnowledgeLibrary({
     }));
 
     try {
-      await fetch("http://127.0.0.1:2000/download_hf_dataset", {
+      await fetch(`${API_BASE}/download_hf_dataset`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ dataset_id: datasetId }),
       });
-
-      const pollInterval = setInterval(async () => {
-        try {
-          const pRes = await fetch(
-            `http://127.0.0.1:2000/dataset_download_progress?id=${encodeURIComponent(datasetId)}`
-          );
-          const pData = await pRes.json();
-          if (pData.progress !== undefined) {
-            setDownloadProgressMap((prev) => ({
-              ...prev,
-              [datasetId]: { progress: pData.progress, task: pData.task || "Downloading..." },
-            }));
-          }
-          if (pData.status === "completed" || pData.progress >= 100) {
-            clearInterval(pollInterval);
-            setCachedMap((prev) => ({ ...prev, [datasetId]: true }));
-            setDownloadingId(null);
-          } else if (pData.status === "error") {
-            clearInterval(pollInterval);
-            setDownloadingId(null);
-          }
-        } catch (err) {
-          clearInterval(pollInterval);
-          setDownloadingId(null);
-        }
-      }, 500);
+      startPollingProgress(datasetId);
     } catch (e) {
       console.error("Failed downloading dataset:", e);
       setDownloadingId(null);
+    }
+  };
+
+  const handleCancelDownload = async (datasetId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setDownloadingId(null);
+    setDownloadProgressMap((prev) => {
+      const next = { ...prev };
+      delete next[datasetId];
+      return next;
+    });
+    try {
+      await fetch(`${API_BASE}/cancel_dataset_download`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dataset_id: datasetId }),
+      });
+    } catch (err) {
+      console.error("Failed cancelling download:", err);
     }
   };
 
@@ -261,7 +346,7 @@ export function KnowledgeLibrary({
 
   const fetchLocalDatasets = async () => {
     try {
-      const resp = await fetch("http://127.0.0.1:2000/list_local_datasets");
+      const resp = await fetch(`${API_BASE}/list_local_datasets`);
       const data = await resp.json();
       setLocalDatasets(data.datasets || []);
     } catch (e) {
@@ -271,7 +356,7 @@ export function KnowledgeLibrary({
 
   const fetchTextSources = async () => {
     try {
-      const resp = await fetch("http://127.0.0.1:2000/text_sources");
+      const resp = await fetch(`${API_BASE}/text_sources`);
       const data = await resp.json();
       setTextSources(data.sources || []);
     } catch (e) {
@@ -285,7 +370,7 @@ export function KnowledgeLibrary({
     // Check background distill status
     const checkStatus = async () => {
       try {
-        const resp = await fetch("http://127.0.0.1:2000/distill/status");
+        const resp = await fetch(`${API_BASE}/distill/status`);
         const status = await resp.json();
         if (status.step !== "idle") {
           setDistillStatus(status);
@@ -369,6 +454,7 @@ export function KnowledgeLibrary({
   const handleOpenPreview = async (dataset: DatasetCardItem) => {
     setPreviewDataset(dataset);
     setPreviewSamples([]);
+    setPreviewError(null);
     setIsLoadingPreview(true);
 
     if (dataset.type === "collection") {
@@ -386,9 +472,12 @@ export function KnowledgeLibrary({
         if (text.includes("[JSON_RESULTS]")) {
           const results = JSON.parse(text.split("[JSON_RESULTS]")[1].trim());
           setPreviewSamples(results || []);
+        } else if (data.error) {
+          setPreviewError(data.error);
         }
-      } catch (e) {
+      } catch (e: any) {
         console.error("Failed exploring collection:", e);
+        setPreviewError(e?.message || "Failed exploring collection.");
       } finally {
         setIsLoadingPreview(false);
       }
@@ -396,16 +485,22 @@ export function KnowledgeLibrary({
     }
 
     try {
-      const resp = await fetch(`http://127.0.0.1:2000/preview_dataset?id=${encodeURIComponent(dataset.id)}`);
+      const resp = await fetch(`${API_BASE}/preview_dataset?id=${encodeURIComponent(dataset.id)}`);
       const data = await resp.json();
-      if (data.samples && data.samples.length > 0) {
+      if (data.status === "success" && data.samples && data.samples.length > 0) {
         setPreviewSamples(data.samples);
+        setPreviewError(null);
+      } else if (data.status === "error" || data.error) {
+        setPreviewSamples([]);
+        setPreviewError(data.error || "Dataset preview failed or authentication required.");
       } else {
         setPreviewSamples([]);
+        setPreviewError(null);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("Failed previewing dataset:", e);
       setPreviewSamples([]);
+      setPreviewError(e?.message || "Network error loading dataset preview.");
     } finally {
       setIsLoadingPreview(false);
     }
@@ -422,7 +517,7 @@ export function KnowledgeLibrary({
     if (sourceType === "text") {
       try {
         setIsMining(true);
-        const resp = await fetch("http://127.0.0.1:2000/text_sources", {
+        const resp = await fetch(`${API_BASE}/text_sources`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ raw_text: sourceInput, name: collection }),
@@ -486,7 +581,7 @@ export function KnowledgeLibrary({
   // Browse PDF File
   const handleBrowsePdf = async () => {
     try {
-      const resp = await fetch("http://127.0.0.1:2000/browse_pdf");
+      const resp = await fetch(`${API_BASE}/browse_pdf`);
       const data = await resp.json();
       if (data.path) {
         setSourceInput(data.path);
@@ -512,7 +607,7 @@ export function KnowledgeLibrary({
 
     try {
       if (distillTarget.type === "collection") {
-        await fetch("http://127.0.0.1:2000/distill/start", {
+        await fetch(`${API_BASE}/distill/start`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -522,9 +617,9 @@ export function KnowledgeLibrary({
           }),
         });
       } else if (distillTarget.type === "text_source") {
-        const sourceResp = await fetch(`http://127.0.0.1:2000/text_sources/${distillTarget.id}`);
+        const sourceResp = await fetch(`${API_BASE}/text_sources/${distillTarget.id}`);
         const sourceData = await sourceResp.json();
-        await fetch("http://127.0.0.1:2000/distill/text", {
+        await fetch(`${API_BASE}/distill/text`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -540,7 +635,7 @@ export function KnowledgeLibrary({
       // Poll until complete
       const interval = setInterval(async () => {
         await fetchLocalDatasets();
-        const res = await fetch("http://127.0.0.1:2000/distill/status");
+        const res = await fetch(`${API_BASE}/distill/status`);
         const status = await res.json();
         if (status.step === "complete" || status.step === "error") {
           clearInterval(interval);
@@ -567,13 +662,13 @@ export function KnowledgeLibrary({
           }),
         });
       } else if (itemToDelete.type === "local") {
-        await fetch("http://127.0.0.1:2000/delete_dataset", {
+        await fetch(`${API_BASE}/delete_dataset`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id: itemToDelete.id }),
         });
       } else if (itemToDelete.type === "text_source") {
-        await fetch(`http://127.0.0.1:2000/text_sources/${itemToDelete.id}`, { method: "DELETE" });
+        await fetch(`${API_BASE}/text_sources/${itemToDelete.id}`, { method: "DELETE" });
       }
       setItemToDelete(null);
       await fetchAllData();
@@ -872,17 +967,19 @@ export function KnowledgeLibrary({
                       {/* Download Button / Progress Bar (Visible if dataset is not downloaded locally) */}
                       {!dataset.is_downloaded && (
                         downloadingId === dataset.id ? (
-                          <div className="flex flex-col gap-1 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 min-w-[130px] animate-in fade-in duration-200">
-                            <div className="flex items-center justify-between text-[9px] font-mono text-amber-300 font-bold">
-                              <span className="truncate max-w-[85px]">{downloadProgressMap[dataset.id]?.task || "Downloading..."}</span>
-                              <span>{downloadProgressMap[dataset.id]?.progress || 10}%</span>
-                            </div>
-                            <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
-                              <div
-                                className="bg-amber-400 h-full transition-all duration-300 rounded-full"
-                                style={{ width: `${downloadProgressMap[dataset.id]?.progress || 10}%` }}
-                              />
-                            </div>
+                          <div
+                            title={downloadProgressMap[dataset.id]?.task || "Connecting & caching dataset metadata..."}
+                            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 font-mono text-[10px] font-bold"
+                          >
+                            <Loader2 size={13} className="animate-spin text-amber-400 shrink-0" />
+                            <span>Downloading...</span>
+                            <button
+                              onClick={(e) => handleCancelDownload(dataset.id, e)}
+                              title="Cancel Download"
+                              className="ml-1 p-0.5 text-amber-400/60 hover:text-red-400 hover:bg-red-500/20 rounded transition-all cursor-pointer"
+                            >
+                              <X size={12} />
+                            </button>
                           </div>
                         ) : (
                           <button
@@ -1120,6 +1217,54 @@ export function KnowledgeLibrary({
                 <div className="py-20 flex flex-col items-center justify-center gap-3 text-white/40 text-xs font-mono">
                   <Loader2 className="animate-spin text-indigo-400" size={24} />
                   <span>Loading dataset sample records...</span>
+                </div>
+              ) : previewError ? (
+                <div className="p-6 rounded-2xl bg-amber-500/5 border border-amber-500/20 space-y-4 animate-in fade-in duration-300">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-amber-500/20 rounded-xl shrink-0">
+                      <AlertCircle className="text-amber-500" size={20} />
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-bold text-amber-200">
+                        {previewError.toLowerCase().includes("gated") ||
+                        previewError.toLowerCase().includes("auth") ||
+                        previewError.toLowerCase().includes("token") ||
+                        previewError.toLowerCase().includes("401")
+                          ? "Hugging Face Authentication / Gated Access Required"
+                          : "Dataset Load Error"}
+                      </h4>
+                      <p className="text-xs text-amber-300/80 leading-relaxed font-mono break-words">
+                        {previewError}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t border-amber-500/20 space-y-2">
+                    <p className="text-xs text-white/70">
+                      If your Hugging Face Access Token is expired or missing, paste your fresh token below to update your <code className="text-amber-400 font-mono">.env</code>:
+                    </p>
+                    <HuggingFaceAuth envKey="HF_TOKEN" placeholder="Paste your fresh hf_... token here" />
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2">
+                    <a
+                      href={previewDataset.hf_url || `https://huggingface.co/datasets/${previewDataset.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-amber-400 hover:underline flex items-center gap-1.5 font-bold"
+                    >
+                      <ExternalLink size={14} />
+                      <span>Accept Dataset Access Terms on Hugging Face</span>
+                    </a>
+
+                    <button
+                      onClick={() => handleOpenPreview(previewDataset)}
+                      className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs flex items-center gap-2 transition-all shadow-lg shadow-amber-900/40 cursor-pointer"
+                    >
+                      <RefreshCw size={14} />
+                      <span>Retry Preview</span>
+                    </button>
+                  </div>
                 </div>
               ) : previewSamples.length === 0 ? (
                 <div className="py-16 text-center text-white/30 text-xs font-mono">
