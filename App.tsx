@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react";
+import { Box, Cpu } from "lucide-react";
 import ManageSkillsPanel from "./components/ManageSkillsPanel";
 import { KnowledgeLibrary } from "./components/KnowledgeLibrary";
 import { ThinkingView } from "./components/ThinkingView";
@@ -19,6 +20,7 @@ import { interruptExecution } from "./services/aiService";
 
 export default function App() {
   const [activeView, setActiveView] = useState<TopLevelView>("arena");
+  const [quantizeTab, setQuantizeTab] = useState<"gguf" | "onnx">("gguf");
   const [chatSelectedModel, setChatSelectedModel] = useState<string>("");
   const [systemInfo, setSystemInfo] = useState<any>(null);
 
@@ -251,24 +253,61 @@ export default function App() {
             onTypeChangeCell={updateCellType}
             onDismissClarification={() => setClarification(null)}
           />
-        ) : activeView === "gguf" ? (
-          <div className="flex-1 flex flex-col bg-[#0B090F] overflow-y-auto p-8 items-center space-y-8 w-full">
+        ) : (activeView === "quantize" || activeView === "gguf" || activeView === "onnx") ? (
+          <div className="flex-1 flex flex-col bg-[#0B090F] overflow-y-auto p-8 items-center space-y-6 w-full">
             <div className="text-center space-y-2 max-w-2xl shrink-0">
               <h2 className="text-3xl font-black text-white tracking-tighter uppercase">
-                GGUF Model Quantization
+                Model Quantization & Export
               </h2>
-              <p className="text-sm text-white/40">Compress LLMs for fast local CPU & Edge execution.</p>
+              <p className="text-sm text-white/40">
+                Compress LLMs and fine-tuned adapters for local GGUF or in-browser ONNX execution.
+              </p>
             </div>
+
+            {/* Sub-tabs for GGUF and ONNX */}
+            <div className="flex bg-[#140F1D] p-1.5 rounded-2xl border border-white/10 gap-2 shrink-0">
+              <button
+                onClick={() => setQuantizeTab("gguf")}
+                className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-semibold text-xs transition-all duration-300 cursor-pointer ${
+                  quantizeTab === "gguf"
+                    ? "bg-amber-500/20 text-amber-200 border border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
+                    : "text-gray-400 hover:text-white border border-transparent hover:bg-white/5"
+                }`}
+              >
+                <Box size={16} />
+                <span>GGUF</span>
+              </button>
+
+              <button
+                onClick={() => setQuantizeTab("onnx")}
+                className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-semibold text-xs transition-all duration-300 cursor-pointer ${
+                  quantizeTab === "onnx"
+                    ? "bg-amber-500/20 text-amber-200 border border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
+                    : "text-gray-400 hover:text-white border border-transparent hover:bg-white/5"
+                }`}
+              >
+                <Cpu size={16} />
+                <span>ONNX</span>
+              </button>
+            </div>
+
             <div className="w-full max-w-3xl bg-[#140F1D] border border-white/5 rounded-[32px] p-8 shadow-2xl relative group shrink-0">
               <div className="absolute top-0 right-0 p-12 bg-amber-500/5 blur-[120px] rounded-full group-hover:bg-amber-500/10 transition-colors duration-1000" />
-              <QuantizationPanel
-                onStart={handleStartQuantization}
-                isExecuting={isQuantizing}
-                deploymentUrl={deploymentUrl}
-                onTestInArena={(filename) => {
-                  handleOpenChat(filename || workflowModelFilename || undefined);
-                }}
-              />
+              {quantizeTab === "gguf" ? (
+                <QuantizationPanel
+                  onStart={handleStartQuantization}
+                  isExecuting={isQuantizing}
+                  deploymentUrl={deploymentUrl}
+                  onTestInArena={(filename) => {
+                    handleOpenChat(filename || workflowModelFilename || undefined);
+                  }}
+                />
+              ) : (
+                <OnnxPanel
+                  onStart={handleStartOnnx}
+                  isExecuting={isOnnxExecuting}
+                />
+              )}
             </div>
           </div>
         ) : activeView === "evaluate" ? (
@@ -282,22 +321,6 @@ export default function App() {
             <div className="w-full max-w-4xl bg-[#140F1D] border border-white/5 rounded-[32px] p-8 shadow-2xl relative group shrink-0">
               <div className="absolute top-0 right-0 p-12 bg-amber-500/5 blur-[120px] rounded-full group-hover:bg-amber-500/10 transition-colors duration-1000" />
               <BenchmarkPanel systemInfo={systemInfo} />
-            </div>
-          </div>
-        ) : activeView === "onnx" ? (
-          <div className="flex-1 flex flex-col bg-[#0B090F] overflow-y-auto p-8 items-center space-y-8 w-full">
-            <div className="text-center space-y-2 max-w-2xl shrink-0">
-              <h2 className="text-3xl font-black text-white tracking-tighter uppercase">
-                ONNX Web & Edge Runtime Export
-              </h2>
-              <p className="text-sm text-white/40">Export adapters for in-browser ONNX Runtime inference.</p>
-            </div>
-            <div className="w-full max-w-3xl bg-[#140F1D] border border-white/5 rounded-[32px] p-8 shadow-2xl relative group shrink-0">
-              <div className="absolute top-0 right-0 p-12 bg-amber-500/5 blur-[120px] rounded-full group-hover:bg-amber-500/10 transition-colors duration-1000" />
-              <OnnxPanel
-                onStart={handleStartOnnx}
-                isExecuting={isOnnxExecuting}
-              />
             </div>
           </div>
         ) : null}

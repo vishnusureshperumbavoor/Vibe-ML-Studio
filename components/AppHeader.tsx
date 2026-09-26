@@ -6,7 +6,6 @@ import {
   StopCircle,
   Box,
   BarChart2,
-  Cpu,
   LayoutGrid,
   Square,
   Swords,
@@ -22,6 +21,7 @@ export type TopLevelView =
   | "evaluate"
   | "chat"
   | "creative"
+  | "quantize"
   | "gguf"
   | "onnx"
   | "studio";
@@ -193,7 +193,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
             }`}
           >
             <Zap size={16} />
-            <span className="text-xs font-semibold">Build</span>
+            <span className="text-xs font-semibold">Tune</span>
           </Button>
 
           <Button
@@ -213,43 +213,15 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setActiveView("creative")}
+            onClick={() => setActiveView("quantize")}
             className={`gap-2 h-10 px-3.5 rounded-xl transition-all duration-300 border ${
-              activeView === "creative"
-                ? "bg-purple-500/20 text-purple-200 border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.15)]"
-                : "text-gray-400 border-transparent hover:bg-white/5"
-            }`}
-          >
-            <Sparkles size={16} />
-            <span className="text-xs font-semibold">Diffusion</span>
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setActiveView("gguf")}
-            className={`gap-2 h-10 px-3.5 rounded-xl transition-all duration-300 border ${
-              activeView === "gguf"
+              activeView === "quantize" || activeView === "gguf" || activeView === "onnx"
                 ? "bg-amber-500/20 text-amber-200 border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
                 : "text-gray-400 border-transparent hover:bg-white/5"
             }`}
           >
             <Box size={16} />
-            <span className="text-xs font-semibold">GGUF</span>
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setActiveView("onnx")}
-            className={`gap-2 h-10 px-3.5 rounded-xl transition-all duration-300 border ${
-              activeView === "onnx"
-                ? "bg-amber-500/20 text-amber-200 border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
-                : "text-gray-400 border-transparent hover:bg-white/5"
-            }`}
-          >
-            <Cpu size={16} />
-            <span className="text-xs font-semibold">ONNX</span>
+            <span className="text-xs font-semibold">Quantize</span>
           </Button>
         </div>
 

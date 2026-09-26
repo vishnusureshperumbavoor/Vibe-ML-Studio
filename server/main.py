@@ -630,6 +630,10 @@ async def list_native_models():
                     base_hf_url = "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct"
                     base_repo_id = "microsoft/Phi-3-mini-4k-instruct"
                 
+                desc = "System 2 local base model for text generation and chat."
+                if "laya" in f.lower() or f.lower() == "model.safetensors":
+                    desc = "System 1 non-autoregressive decision engine (~33ms latency) for classification and triage."
+
                 results.append({
                     "name": f,
                     "display_name": disp_name,
@@ -640,7 +644,7 @@ async def list_native_models():
                     "quantization": quant,
                     "parameters": params,
                     "architecture": arch,
-                    "description": "System 1 decision engine / local model for fast inference.",
+                    "description": desc,
                     "hf_url": base_hf_url,
                     "repo_id": base_repo_id
                 })

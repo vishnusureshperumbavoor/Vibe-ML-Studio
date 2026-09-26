@@ -62,7 +62,9 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
   const [localModels, setLocalModels] = useState<GalleryModelItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [activeFilter, setActiveFilter] = useState<"all" | "adapter" | "base" | "onnx" | "hub">("all");
+  const [activeFilter, setActiveFilter] = useState<
+    "all" | "system1" | "system2" | "image_gen" | "adapter" | "base" | "onnx" | "hub"
+  >("all");
   const [activeChatModel, setActiveChatModel] = useState<string | null>(initialSelectedModel || null);
 
   // Model Download States
@@ -384,9 +386,65 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
     })),
   ];
 
+  const isImageGen = (m: GalleryModelItem) => {
+    const tagsStr = (m.tags || []).join(" ").toLowerCase();
+    const nameStr = (m.name + " " + (m.display_name || "") + " " + (m.description || "") + " " + (m.architecture || "")).toLowerCase();
+    return (
+      tagsStr.includes("image generation") ||
+      tagsStr.includes("image gen") ||
+      tagsStr.includes("diffusion") ||
+      tagsStr.includes("flux") ||
+      tagsStr.includes("stable diffusion") ||
+      nameStr.includes("diffusion") ||
+      nameStr.includes("flux") ||
+      nameStr.includes("stable-diffusion") ||
+      nameStr.includes("sdxl")
+    );
+  };
+
+  const isSystem1 = (m: GalleryModelItem) => {
+    if (isImageGen(m)) return false;
+    const nameStr = (m.name + " " + (m.display_name || "") + " " + (m.architecture || "")).toLowerCase();
+    const tagsStr = (m.tags || []).join(" ").toLowerCase();
+
+    // Generative LLM architectures are System 2 models
+    if (
+      nameStr.includes("qwen") ||
+      nameStr.includes("bonsai") ||
+      nameStr.includes("llama") ||
+      nameStr.includes("deepseek") ||
+      nameStr.includes("phi") ||
+      nameStr.includes("smollm") ||
+      nameStr.includes("mistral") ||
+      m.type === "adapter"
+    ) {
+      return false;
+    }
+
+    // System 1 models: non-autoregressive decision engines, ModernBERT, classification, triage primitives
+    return (
+      tagsStr.includes("system 1") ||
+      tagsStr.includes("system1") ||
+      tagsStr.includes("triage") ||
+      tagsStr.includes("decision engine") ||
+      nameStr.includes("laya") ||
+      nameStr.includes("modernbert") ||
+      nameStr.includes("bert")
+    );
+  };
+
+  const isSystem2 = (m: GalleryModelItem) => {
+    if (isImageGen(m)) return false;
+    // System 2 models: all generative LLMs (Qwen, Bonsai, DeepSeek, LoRA adapters, instruction/code SLMs)
+    return !isSystem1(m);
+  };
+
   const filteredModels = allCards.filter((m) => {
     let matchesFilter = true;
-    if (activeFilter === "adapter") matchesFilter = m.type === "adapter";
+    if (activeFilter === "system1") matchesFilter = isSystem1(m);
+    else if (activeFilter === "system2") matchesFilter = isSystem2(m);
+    else if (activeFilter === "image_gen") matchesFilter = isImageGen(m);
+    else if (activeFilter === "adapter") matchesFilter = m.type === "adapter";
     else if (activeFilter === "base") matchesFilter = m.type === "base" && m.is_downloaded;
     else if (activeFilter === "onnx") matchesFilter = m.type === "onnx";
     else if (activeFilter === "hub") matchesFilter = !m.is_downloaded;
@@ -546,10 +604,43 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
               All Models ({allCards.length})
             </button>
             <button
+              onClick={() => setActiveFilter("system1")}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeFilter === "system1"
+                  ? "bg-emerald-500 text-black shadow-lg shadow-emerald-500/20"
+                  : "text-white/50 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              <Zap size={12} />
+              <span>System 1 ({allCards.filter(isSystem1).length})</span>
+            </button>
+            <button
+              onClick={() => setActiveFilter("system2")}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeFilter === "system2"
+                  ? "bg-amber-500 text-black shadow-lg shadow-amber-500/20"
+                  : "text-white/50 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              <Cpu size={12} />
+              <span>System 2 ({allCards.filter(isSystem2).length})</span>
+            </button>
+            <button
+              onClick={() => setActiveFilter("image_gen")}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeFilter === "image_gen"
+                  ? "bg-purple-500 text-white shadow-lg shadow-purple-500/20"
+                  : "text-white/50 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              <Sparkles size={12} />
+              <span>Image Gen ({allCards.filter(isImageGen).length})</span>
+            </button>
+            <button
               onClick={() => setActiveFilter("adapter")}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                 activeFilter === "adapter"
-                  ? "bg-amber-500 text-black shadow-lg shadow-amber-500/20"
+                  ? "bg-amber-600 text-white shadow-lg shadow-amber-900/40"
                   : "text-white/50 hover:text-white hover:bg-white/5"
               }`}
             >
@@ -560,7 +651,7 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
               onClick={() => setActiveFilter("base")}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                 activeFilter === "base"
-                  ? "bg-purple-600 text-white shadow-lg shadow-purple-900/40"
+                  ? "bg-blue-600 text-white shadow-lg shadow-blue-900/40"
                   : "text-white/50 hover:text-white hover:bg-white/5"
               }`}
             >
@@ -577,17 +668,6 @@ export const ModelGallery: React.FC<ModelGalleryProps> = ({
             >
               <Cloud size={12} />
               <span>Hub Starters ({totalHubAvailable})</span>
-            </button>
-            <button
-              onClick={() => setActiveFilter("onnx")}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeFilter === "onnx"
-                  ? "bg-indigo-600 text-white shadow-lg shadow-indigo-900/40"
-                  : "text-white/50 hover:text-white hover:bg-white/5"
-              }`}
-            >
-              <Cpu size={12} />
-              <span>ONNX Web ({localModels.filter((m) => m.type === "onnx").length})</span>
             </button>
           </div>
 

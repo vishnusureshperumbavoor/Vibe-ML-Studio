@@ -5,7 +5,7 @@ import {
   User,
   Bot,
   ChevronDown,
-  Trash2,
+  RotateCcw,
   Loader2,
   Sparkles,
   Square,
@@ -1040,7 +1040,7 @@ ${assistantMsg.content}`;
                 ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold"
                 : "text-gray-400 hover:text-purple-400 hover:bg-purple-500/10 disabled:opacity-30"
             }`}
-            title="Copy Diagnostic Report"
+            title="Copy Chat"
           >
             {reportCopied ? <CheckCircle2 size={14} /> : <Copy size={14} />}
           </button>
@@ -1056,7 +1056,7 @@ ${assistantMsg.content}`;
             }}
             title="Clear Chat"
           >
-            <Trash2 size={16} />
+            <RotateCcw size={16} />
           </Button>
         </div>
       </div>
