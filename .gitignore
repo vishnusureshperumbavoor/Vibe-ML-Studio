@@ -52,3 +52,5 @@ python.exe
 .eggs/
 build/
 *.egg
+nlp_comp_data/
+tmp_test_model/
