@@ -16,7 +16,9 @@ from vspml.recipes import (
     generate_blurb_pubmedqa_training_script,
     generate_blurb_predict_script,
     generate_blurb_push_script,
-    BLURB_LEADERBOARD_STANDINGS
+    BLURB_LEADERBOARD_STANDINGS,
+    generate_mteb_similarity_script,
+    MTEB_BENCHMARK_RESULTS
 )
 
 app = typer.Typer(
@@ -39,6 +41,13 @@ blurb_app = typer.Typer(
     no_args_is_help=True,
 )
 app.add_typer(blurb_app, name="blurb")
+
+mteb_app = typer.Typer(
+    name="mteb",
+    help="Massive Text Embedding Benchmark (MTEB) — Dense Retrieval & Semantic Similarity",
+    no_args_is_help=True,
+)
+app.add_typer(mteb_app, name="mteb")
 
 
 @app.command()
@@ -747,6 +756,122 @@ def blurb_push(
         f"[dim]vspml blurb predict --model-dir {repo_id} -q \"Do GLP-1 agonists improve renal outcomes?\" -c \"...\"[/dim]"
     )
     console.print(Panel(summary_panel, title="[bold green]Hugging Face Deployment[/bold green]", border_style="green"))
+
+
+@mteb_app.command("leaderboard")
+def mteb_leaderboard():
+    """
+    Display official Massive Text Embedding Benchmark (MTEB) scores for VSP Agents models.
+    """
+    print_banner()
+
+    table = Table(
+        title="[bold cyan]🏆 MTEB Benchmark Results — VSP Agents Biomedical Embedding Model[/bold cyan]",
+        border_style="cyan"
+    )
+    table.add_column("Task", style="bold white", width=14)
+    table.add_column("Category", style="cyan", width=34)
+    table.add_column("Metric", style="dim", width=22)
+    table.add_column("Score", justify="right", style="bold green", width=18)
+    table.add_column("Key Benchmarks", style="dim", width=38)
+
+    for r in MTEB_BENCHMARK_RESULTS:
+        table.add_row(
+            r["task"],
+            r["category"],
+            r["metric"],
+            r["score"],
+            r["details"]
+        )
+
+    console.print(table)
+    console.print(
+        "\n[dim]Model ID:[/dim] [bold cyan]vishnusureshperumbavoor/vsp-agent-biomed-embedding-a100[/bold cyan]\n"
+        "[dim]Hugging Face Repository:[/dim] [cyan underline]https://huggingface.co/vishnusureshperumbavoor/vsp-agent-biomed-embedding-a100[/cyan underline]\n"
+        "[dim]Run [bold cyan]vspml mteb predict[/bold cyan] to test live clinical cosine similarities.[/dim]\n"
+    )
+
+
+@mteb_app.command("predict")
+def mteb_predict(
+    text1: str = typer.Option("GLP-1 receptor agonists reduce cardiovascular mortality in type 2 diabetes.", "--text1", "-a", help="First biomedical or clinical text"),
+    text2: str = typer.Option("Semaglutide demonstrates significant reduction in adverse cardiac events.", "--text2", "-b", help="Second biomedical or clinical text"),
+    model_id: str = typer.Option("vishnusureshperumbavoor/vsp-agent-biomed-embedding-a100", "--model-id", "-m", help="Hugging Face embedding model repository ID"),
+):
+    """
+    Compute dense clinical semantic textual similarity using VSP Agents MTEB model on Google Colab GPU.
+    """
+    print_banner()
+
+    status = asyncio.run(fetch_daemon_status())
+    if not status or not status.get("connected"):
+        print_error("Google Colab GPU is not connected! Run `vspml connect` first.")
+        raise typer.Exit(code=1)
+
+    console.print(f"[bold white]Text 1:[/bold white] [bold cyan]{text1}[/bold cyan]")
+    console.print(f"[bold white]Text 2:[/bold white] [bold cyan]{text2}[/bold cyan]")
+    console.print(f"[bold white]Model:[/bold white] [dim]{model_id}[/dim]\n")
+
+    script = generate_mteb_similarity_script(model_id=model_id, text1=text1, text2=text2)
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[bold cyan]Computing 768-dim Dense Embeddings on Colab GPU...[/bold cyan]"),
+        console=console,
+        transient=True,
+    ) as progress:
+        progress.add_task("predict", total=None)
+        try:
+            res = asyncio.run(execute_remote_code(script, keep_cell=False))
+        except Exception as e:
+            print_error(f"Inference failed: {e}")
+            raise typer.Exit(code=1)
+
+    raw_output = res.get("output", "")
+    import re
+    pred_data = None
+
+    m = re.search(r'###VSPML_MTEB_START###(.*?)###VSPML_MTEB_END###', raw_output, re.DOTALL)
+    if m:
+        try:
+            pred_data = json.loads(m.group(1).strip())
+        except Exception:
+            pass
+
+    if not pred_data:
+        try:
+            parsed_json = json.loads(raw_output)
+            all_text = []
+            for out in parsed_json.get("outputs", []):
+                all_text.extend(out.get("text", []))
+            combined_text = "".join(all_text)
+            m = re.search(r'###VSPML_MTEB_START###(.*?)###VSPML_MTEB_END###', combined_text, re.DOTALL)
+            if m:
+                pred_data = json.loads(m.group(1).strip())
+        except Exception:
+            pass
+
+    if not pred_data:
+        console.print("[dim]Raw Colab Response:[/dim]")
+        console.print(raw_output)
+        print_error("Could not parse similarity output.", title="Parsing Error")
+        raise typer.Exit(code=1)
+
+    sim = pred_data.get("similarity", 0.0)
+    dim = pred_data.get("dimension", 768)
+    lat = pred_data.get("latency_ms", 0.0)
+
+    bars = int(max(0, sim) * 30)
+    bar_visual = f"[bold green]{'█' * bars}[/bold green]{'░' * (30 - bars)}"
+
+    summary_panel = (
+        f"[bold white]Cosine Similarity:[/bold white] [bold green]{sim:.4f}[/bold green] ({round(sim * 100, 1)}% Correlation)\n"
+        f"[bold white]Distribution:[/bold white] {bar_visual}\n"
+        f"[bold white]Embedding Dimension:[/bold white] [bold cyan]{dim} float32 tensors[/bold cyan]\n"
+        f"[bold white]Inference Latency:[/bold white] [bold yellow]{lat} ms[/bold yellow] [dim]on NVIDIA A100 SXM4[/dim]\n\n"
+        f"[dim]Verdict: {'High Semantic & Clinical Equivalence' if sim > 0.8 else 'Moderate/Low Semantic Proximity'}[/dim]"
+    )
+    console.print(Panel(summary_panel, title="[bold green]MTEB Semantic Similarity Result[/bold green]", border_style="green"))
 
 
 def main():
