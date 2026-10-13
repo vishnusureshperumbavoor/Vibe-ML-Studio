@@ -42,7 +42,7 @@ async def execute_remote_code(code: str, keep_cell: bool = True) -> Dict[str, An
     async with httpx.AsyncClient(timeout=1200.0) as client:
         resp = await client.post(
             f"{API_BASE_URL}/colab/execute",
-            json={"code": code, "keep_cell": keepCell}
+            json={"code": code, "keep_cell": keep_cell}
         )
         if resp.status_code != 200:
             raise RuntimeError(f"Colab execution error ({resp.status_code}): {resp.text}")
