@@ -6,6 +6,7 @@ from vspml.recipes.decision import (
 from vspml.recipes.blurb import (
     generate_blurb_pubmedqa_training_script,
     generate_blurb_predict_script,
+    generate_blurb_push_script,
     BLURB_LEADERBOARD_STANDINGS
 )
 
@@ -15,6 +16,7 @@ __all__ = [
     "DEFAULT_DEMO_DATASET",
     "generate_blurb_pubmedqa_training_script",
     "generate_blurb_predict_script",
+    "generate_blurb_push_script",
     "BLURB_LEADERBOARD_STANDINGS"
 ]
 
