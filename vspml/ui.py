@@ -6,13 +6,13 @@ from rich.text import Text
 console = Console()
 
 BANNER = r"""[bold magenta]
- __     ___ _          __  __ _       _____       ___  
- \ \   / (_) |__   ___|  \/  | |     |___ /      / _ \ 
-  \ \ / /| | '_ \ / _ \ |\/| | |       |_ \     | | | |
-   \ V / | | |_) |  __/ |  | | |___   ___) |    | |_| |
-    \_/  |_|_.__/ \___|_|  |_|_____| |____/   ●  \___/ 
+__     ______  ____    __  __ _     
+\ \   / / ___||  _ \  |  \/  | |    
+ \ \ / /\___ \| |_) | | |\/| | |    
+  \ V /  ___) |  __/  | |  | | |___ 
+   \_/  |____/|_|     |_|  |_|_____|
 [/bold magenta]
-[bold white] VibeML[/bold white] [bold cyan]v3.0[/bold cyan] [dim]| Zero-VRAM Decision Model Fine-Tuning via Colab MCP[/dim]
+[bold white] VSP ML[/bold white] [bold cyan]v0.1.0[/bold cyan] [dim]| Zero-VRAM Decision Model CLI via Google Colab MCP[/dim]
 """
 
 def print_banner():
@@ -37,7 +37,7 @@ def print_error(message: str, title: str = "Error"):
     )
 
 def print_status_table(status_data: dict):
-    table = Table(title="[bold cyan]VibeML 3.0 Status[/bold cyan]", border_style="cyan")
+    table = Table(title="[bold cyan]VSP ML Status[/bold cyan]", border_style="cyan")
     table.add_column("Property", style="bold white", width=22)
     table.add_column("Status / Value", style="white")
 

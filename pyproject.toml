@@ -3,22 +3,38 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "vibeml"
-version = "3.0.0.alpha0"
-description = "VibeML 3.0: Zero-VRAM Decision Model Fine-Tuning CLI via Google Colab MCP"
-readme = "VIBEML_3_0_EXPANSION_PLAN.md"
-authors = [{ name = "VibeML Team" }]
+name = "vspml"
+version = "0.1.0"
+description = "VSP ML: Zero-VRAM Decision Model Fine-Tuning CLI via Google Colab MCP"
+readme = "README_PYPI.md"
+authors = [{ name = "Vishnu Suresh Perumbavoor" }]
 license = { text = "MIT" }
 requires-python = ">=3.10"
+keywords = ["decision-models", "colab", "mcp", "fine-tuning", "modernbert", "laya", "deep-learning", "machine-learning"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
 dependencies = [
     "typer>=0.9.0",
     "rich>=13.0.0",
     "httpx>=0.25.0"
 ]
 
+[project.urls]
+Homepage = "https://github.com/vishnusureshperumbavoor/Vibe-ML-Studio"
+
 [project.scripts]
-vibeml = "vibeml.cli:main"
+vspml = "vspml.cli:main"
+vibeml = "vspml.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["vibeml*"]
+include = ["vspml*"]

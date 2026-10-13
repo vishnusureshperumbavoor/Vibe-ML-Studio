@@ -2,12 +2,12 @@ import asyncio
 import sys
 import typer
 from rich.progress import Progress, SpinnerColumn, TextColumn
-from vibeml.ui import console, print_banner, print_success, print_error, print_status_table
-from vibeml.colab import fetch_daemon_status, trigger_daemon_connect, wait_for_colab_pairing
+from vspml.ui import console, print_banner, print_success, print_error, print_status_table
+from vspml.colab import fetch_daemon_status, trigger_daemon_connect, wait_for_colab_pairing
 
 app = typer.Typer(
-    name="vibeml",
-    help="VibeML 3.0 — Zero-VRAM Decision Model CLI via Google Colab MCP",
+    name="vspml",
+    help="VSP ML — Zero-VRAM Decision Model CLI via Google Colab MCP",
     no_args_is_help=True,
     add_completion=False,
 )
@@ -32,8 +32,8 @@ def connect(
     status = asyncio.run(fetch_daemon_status())
     if not status:
         print_error(
-            "VibeML Daemon is not reachable on http://127.0.0.1:2000.\n"
-            "Please ensure the VibeML backend server is running (`npm run start:server`).",
+            "VSP ML Daemon is not reachable on http://127.0.0.1:2000.\n"
+            "Please ensure the backend server is running (`npm run start:server`).",
             title="Daemon Offline"
         )
         raise typer.Exit(code=1)
@@ -71,7 +71,7 @@ def connect(
             "Timed out waiting for Colab tab to pair.\n"
             "• Ensure your browser tab at colab.research.google.com finished loading.\n"
             "• Verify Colab has internet access and can connect to localhost.\n"
-            "• Run `vibeml status` to check connection state.",
+            "• Run `vspml status` to check connection state.",
             title="Pairing Timeout"
         )
         raise typer.Exit(code=1)
@@ -86,7 +86,7 @@ def status():
     status_data = asyncio.run(fetch_daemon_status())
     if not status_data:
         print_error(
-            "VibeML Daemon is offline or unreachable on http://127.0.0.1:2000.",
+            "VSP ML Daemon is offline or unreachable on http://127.0.0.1:2000.",
             title="Daemon Offline"
         )
         raise typer.Exit(code=1)
@@ -97,21 +97,21 @@ def status():
 @app.command()
 def version():
     """
-    Show VibeML CLI version.
+    Show VSP ML CLI version.
     """
     print_banner()
-    console.print("[bold white]VibeML CLI Version:[/bold white] [bold cyan]3.0.0-alpha[/bold cyan]")
+    console.print("[bold white]VSP ML CLI Version:[/bold white] [bold cyan]0.1.0[/bold cyan]")
     console.print("[dim]Target: Decision Model Engine (Laya / ModernBERT)[/dim]")
 
 
 @decision_app.command("train")
 def decision_train_stub():
     """
-    Fine-tune a System 1 Decision Model on Google Colab GPU (Phase 2 & 3).
+    Fine-tune a System 1 Decision Model on Google Colab GPU.
     """
     print_banner()
-    console.print("[yellow]🚧 Decision training pipeline is coming in Phase 2 & Phase 3.[/yellow]")
-    console.print("Run [bold cyan]vibeml connect[/bold cyan] first to prepare your Colab Cloud GPU session.")
+    console.print("[yellow]🚧 Decision training pipeline is currently under active build.[/yellow]")
+    console.print("Run [bold cyan]vspml connect[/bold cyan] first to prepare your Colab Cloud GPU session.")
 
 
 def main():
