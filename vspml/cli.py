@@ -890,14 +890,17 @@ def kaggle_status():
     print_banner()
 
     panel_text = (
-        f"[bold green]✔ VSP Agents Live on Kaggle Public Hubs![/bold green]\n\n"
+        f"[bold green]✔ VSP Agents Live on Kaggle Public Hubs & Competitions![/bold green]\n\n"
         f"[bold white]Title:[/bold white] [bold cyan]{KAGGLE_PUBLISHED_RESOURCES['title']}[/bold cyan]\n"
-        f"[bold white]Benchmark Performance:[/bold white] [bold green]{KAGGLE_PUBLISHED_RESOURCES['accuracy']}[/bold green] | [bold yellow]{KAGGLE_PUBLISHED_RESOURCES['latency']} latency[/bold yellow]\n\n"
+        f"[bold white]PubMedQA Benchmark:[/bold white] [bold green]{KAGGLE_PUBLISHED_RESOURCES['accuracy']}[/bold green] | [bold yellow]{KAGGLE_PUBLISHED_RESOURCES['latency']} latency[/bold yellow]\n\n"
+        f"[bold white]🏆 Kaggle Competition Submission:[/bold white] [bold green]{KAGGLE_PUBLISHED_RESOURCES['competition_name']}[/bold green]\n"
+        f"[bold white]Official Score:[/bold white] [bold green]{KAGGLE_PUBLISHED_RESOURCES['competition_score']}[/bold green] [dim](Status: COMPLETE)[/dim]\n"
+        f"[bold white]Leaderboard URL:[/bold white] [bold cyan underline]{KAGGLE_PUBLISHED_RESOURCES['competition_url']}[/bold cyan underline]\n"
+        f"[bold white]Team Settings:[/bold white] [dim]{KAGGLE_PUBLISHED_RESOURCES['team_settings_url']}[/dim]\n\n"
         f"[bold white]📓 Public Kaggle Notebook:[/bold white]\n"
         f"[bold cyan underline]{KAGGLE_PUBLISHED_RESOURCES['notebook_url']}[/bold cyan underline]\n\n"
         f"[bold white]📦 Kaggle Models Hub:[/bold white]\n"
-        f"[bold cyan underline]{KAGGLE_PUBLISHED_RESOURCES['model_url']}[/bold cyan underline]\n\n"
-        f"[dim]Kaggle users can run, fork, and upvote this notebook directly on Kaggle with 1-click.[/dim]"
+        f"[bold cyan underline]{KAGGLE_PUBLISHED_RESOURCES['model_url']}[/bold cyan underline]"
     )
     console.print(Panel(panel_text, title="[bold cyan]Kaggle Ecosystem Integration[/bold cyan]", border_style="cyan"))
 
