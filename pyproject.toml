@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vibeml"
+version = "3.0.0.alpha0"
+description = "VibeML 3.0: Zero-VRAM Decision Model Fine-Tuning CLI via Google Colab MCP"
+readme = "VIBEML_3_0_EXPANSION_PLAN.md"
+authors = [{ name = "VibeML Team" }]
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = [
+    "typer>=0.9.0",
+    "rich>=13.0.0",
+    "httpx>=0.25.0"
+]
+
+[project.scripts]
+vibeml = "vibeml.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["vibeml*"]

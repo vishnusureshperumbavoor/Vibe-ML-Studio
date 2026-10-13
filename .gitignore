@@ -46,3 +46,9 @@ server/bin/
 **/*.so.*
 **/__pycache__/
 python.exe
+
+# Python build & packaging artifacts
+*.egg-info/
+.eggs/
+build/
+*.egg
