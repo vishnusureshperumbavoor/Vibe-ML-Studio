@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Button } from "./Button";
 import { TrainingProgress } from "../hooks/useWorkflows";
+import { ColabStatusBadge } from "./ColabStatusBadge";
 
 export type TopLevelView =
   | "arena"
@@ -224,6 +225,9 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
             <span className="text-xs font-semibold">Quantize</span>
           </Button>
         </div>
+
+        {/* Google Colab GPU Connection & Pairing Badge */}
+        <ColabStatusBadge />
 
         {isAutoRunning && (
           <>

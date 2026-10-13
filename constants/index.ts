@@ -1,4 +1,5 @@
 import { ConnectorConfig, PluginDefinition, CellData } from "../types";
+export * from "./logos";
 
 export const API_BASE = "http://127.0.0.1:2000";
 

@@ -19,13 +19,31 @@ from dataset_uploader import upload_dataset_to_hf
 from benchmark_runner import runner as bench_runner
 from hf_uploader import upload_to_hf, create_space_for_model, _load_hf_token
 from huggingface_hub import HfApi
+from colab_bridge.client import internal_colab_client
+from colab_bridge.router import router as colab_router
 
 # Load HF_TOKEN from server/.env or project root
 load_dotenv() # Check server/
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")) # Check project root
 
-# Create the FastAPI App
-app = FastAPI(title="Vibe Training Execution Engine")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Start internal Google Colab MCP daemon
+    print("[VibeML Backend] Starting internal Colab MCP daemon...")
+    try:
+        await internal_colab_client.start()
+    except Exception as e:
+        print(f"[VibeML Backend] Colab MCP start error: {e}")
+    yield
+    # Shutdown: Stop internal Colab MCP daemon
+    print("[VibeML Backend] Stopping internal Colab MCP daemon...")
+    try:
+        await internal_colab_client.stop()
+    except Exception as e:
+        print(f"[VibeML Backend] Colab MCP stop error: {e}")
+
+# Create the FastAPI App with lifespan
+app = FastAPI(title="Vibe Training Execution Engine", lifespan=lifespan)
 
 # Base directory for skills and file access (Project Root)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__)) # Directory of main.py (server/)
@@ -61,6 +79,10 @@ app.add_middleware(
 
 # Mount ONNX models directory for browser downloads
 app.mount("/onnx_models", StaticFiles(directory=ONNX_DIR), name="onnx_models")
+
+# Mount Google Colab Bridge router under /api and /
+app.include_router(colab_router, prefix="/api")
+app.include_router(colab_router)
 
 class ExecuteRequest(BaseModel):
     code: str
