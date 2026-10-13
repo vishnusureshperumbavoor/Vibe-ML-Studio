@@ -18,7 +18,8 @@ from vspml.recipes import (
     generate_blurb_push_script,
     BLURB_LEADERBOARD_STANDINGS,
     generate_mteb_similarity_script,
-    MTEB_BENCHMARK_RESULTS
+    MTEB_BENCHMARK_RESULTS,
+    KAGGLE_PUBLISHED_RESOURCES
 )
 
 app = typer.Typer(
@@ -48,6 +49,13 @@ mteb_app = typer.Typer(
     no_args_is_help=True,
 )
 app.add_typer(mteb_app, name="mteb")
+
+kaggle_app = typer.Typer(
+    name="kaggle",
+    help="Kaggle Code & Models Hub Management",
+    no_args_is_help=True,
+)
+app.add_typer(kaggle_app, name="kaggle")
 
 
 @app.command()
@@ -872,6 +880,26 @@ def mteb_predict(
         f"[dim]Verdict: {'High Semantic & Clinical Equivalence' if sim > 0.8 else 'Moderate/Low Semantic Proximity'}[/dim]"
     )
     console.print(Panel(summary_panel, title="[bold green]MTEB Semantic Similarity Result[/bold green]", border_style="green"))
+
+
+@kaggle_app.command("status")
+def kaggle_status():
+    """
+    Display live published Kaggle models and public code notebooks.
+    """
+    print_banner()
+
+    panel_text = (
+        f"[bold green]✔ VSP Agents Live on Kaggle Public Hubs![/bold green]\n\n"
+        f"[bold white]Title:[/bold white] [bold cyan]{KAGGLE_PUBLISHED_RESOURCES['title']}[/bold cyan]\n"
+        f"[bold white]Benchmark Performance:[/bold white] [bold green]{KAGGLE_PUBLISHED_RESOURCES['accuracy']}[/bold green] | [bold yellow]{KAGGLE_PUBLISHED_RESOURCES['latency']} latency[/bold yellow]\n\n"
+        f"[bold white]📓 Public Kaggle Notebook:[/bold white]\n"
+        f"[bold cyan underline]{KAGGLE_PUBLISHED_RESOURCES['notebook_url']}[/bold cyan underline]\n\n"
+        f"[bold white]📦 Kaggle Models Hub:[/bold white]\n"
+        f"[bold cyan underline]{KAGGLE_PUBLISHED_RESOURCES['model_url']}[/bold cyan underline]\n\n"
+        f"[dim]Kaggle users can run, fork, and upvote this notebook directly on Kaggle with 1-click.[/dim]"
+    )
+    console.print(Panel(panel_text, title="[bold cyan]Kaggle Ecosystem Integration[/bold cyan]", border_style="cyan"))
 
 
 def main():

@@ -13,6 +13,7 @@ from vspml.recipes.mteb import (
     generate_mteb_similarity_script,
     MTEB_BENCHMARK_RESULTS
 )
+from vspml.recipes.kaggle import KAGGLE_PUBLISHED_RESOURCES
 
 __all__ = [
     "generate_decision_training_script",
@@ -23,6 +24,7 @@ __all__ = [
     "generate_blurb_push_script",
     "BLURB_LEADERBOARD_STANDINGS",
     "generate_mteb_similarity_script",
-    "MTEB_BENCHMARK_RESULTS"
+    "MTEB_BENCHMARK_RESULTS",
+    "KAGGLE_PUBLISHED_RESOURCES"
 ]
 
