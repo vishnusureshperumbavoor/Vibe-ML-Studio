@@ -1,7 +1,7 @@
 import asyncio
 import time
 import httpx
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List, Optional
 
 API_BASE_URL = "http://127.0.0.1:2000"
 
@@ -16,11 +16,34 @@ async def fetch_daemon_status() -> Optional[Dict[str, Any]]:
         pass
     return None
 
-async def trigger_daemon_connect() -> Dict[str, Any]:
+async def fetch_colab_accounts() -> List[Dict[str, Any]]:
+    """Fetches Google accounts found in local Chrome profiles."""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(f"{API_BASE_URL}/colab/accounts")
+            if resp.status_code == 200:
+                return resp.json().get("accounts", [])
+    except Exception:
+        pass
+    return []
+
+
+async def trigger_daemon_connect(
+    profile_dir: Optional[str] = None,
+    authuser: Optional[int] = None,
+    email: Optional[str] = None,
+) -> Dict[str, Any]:
     """Sends connect command to the local VibeML backend Colab bridge."""
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(f"{API_BASE_URL}/colab/connect")
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            payload: Dict[str, Any] = {}
+            if profile_dir:
+                payload["profile_dir"] = profile_dir
+            if authuser is not None:
+                payload["authuser"] = authuser
+            if email:
+                payload["email"] = email
+            resp = await client.post(f"{API_BASE_URL}/colab/connect", json=payload)
             if resp.status_code == 200:
                 return resp.json()
     except Exception as e:

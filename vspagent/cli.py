@@ -8,7 +8,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.panel import Panel
 from rich.table import Table
 from vspagent.ui import console, print_banner, print_success, print_error, print_status_table
-from vspagent.colab import fetch_daemon_status, trigger_daemon_connect, wait_for_colab_pairing, execute_remote_code
+from vspagent.colab import fetch_daemon_status, fetch_colab_accounts, trigger_daemon_connect, wait_for_colab_pairing, execute_remote_code
 from vspagent.recipes import (
     generate_decision_training_script,
     generate_decision_prediction_script,
@@ -61,6 +61,10 @@ app.add_typer(kaggle_app, name="kaggle")
 @app.command()
 def connect(
     timeout: int = typer.Option(60, "--timeout", "-t", help="Timeout in seconds to wait for Colab tab pairing"),
+    account: Optional[int] = typer.Option(None, "--account", "-a", help="Chrome account number to connect with (see --list-accounts)"),
+    authuser: Optional[int] = typer.Option(None, "--authuser", "-u", help="Google account index inside the Chrome profile (0 = first)"),
+    email: Optional[str] = typer.Option(None, "--email", "-e", help="Google account email to connect with"),
+    list_accounts: bool = typer.Option(False, "--list-accounts", "-l", help="List Chrome accounts and exit"),
 ):
     """
     Pair and connect your terminal session to Google Colab GPU.
@@ -76,13 +80,81 @@ def connect(
         )
         raise typer.Exit(code=1)
 
+    accounts = asyncio.run(fetch_colab_accounts())
+
+    if list_accounts:
+        if not accounts:
+            console.print("[yellow]No Chrome accounts found.[/yellow]")
+            return
+        table = Table(title="[bold cyan]Chrome Accounts[/bold cyan]", border_style="cyan")
+        table.add_column("#", style="bold cyan", width=3)
+        table.add_column("Name", style="bold white")
+        table.add_column("Email", style="white")
+        table.add_column("Profile", style="dim")
+        table.add_column("Authuser", style="dim")
+        for item in accounts:
+            marker = " [dim](default)[/dim]" if item.get("is_last_used") else ""
+            table.add_row(
+                str(item.get("index")),
+                f"{item.get('name')}{marker}",
+                item.get("email") or "not signed in",
+                item.get("profile_dir", ""),
+                str(item.get("authuser", 0)),
+            )
+        console.print(table)
+        return
+
     if status.get("connected"):
         print_success("Google Colab GPU session is already paired and connected!", title="Connected")
         print_status_table(status)
         return
 
+    profile_dir = None
+    selected_authuser = authuser
+    selected_email = email
+    if account is not None:
+        if not accounts:
+            print_error("No Chrome accounts found. Run without --account to use the default browser profile.")
+            raise typer.Exit(code=1)
+        if not 1 <= account <= len(accounts):
+            print_error(f"Invalid account number. Choose between 1 and {len(accounts)}.")
+            raise typer.Exit(code=1)
+        selected = accounts[account - 1]
+        profile_dir = selected["profile_dir"]
+        selected_authuser = selected.get("authuser", 0)
+        selected_email = selected.get("email") or email
+    elif accounts and authuser is None and email is None:
+        if not sys.stdin.isatty():
+            print_error(
+                "Chrome accounts are available, but this session is not interactive.\n"
+                "Use `vspagent connect --account N` or `vspagent connect --list-accounts`."
+            )
+            raise typer.Exit(code=1)
+        table = Table(title="[bold cyan]Select Chrome Account[/bold cyan]", border_style="cyan")
+        table.add_column("#", style="bold cyan", width=3)
+        table.add_column("Name", style="bold white")
+        table.add_column("Email", style="white")
+        table.add_column("Authuser", style="dim")
+        for item in accounts:
+            marker = " [dim](default)[/dim]" if item.get("is_last_used") else ""
+            table.add_row(
+                str(item.get("index")),
+                f"{item.get('name')}{marker}",
+                item.get("email") or "not signed in",
+                str(item.get("authuser", 0)),
+            )
+        console.print(table)
+        choice = typer.prompt("Select account", default=1, type=int)
+        if not 1 <= choice <= len(accounts):
+            print_error(f"Invalid account number. Choose between 1 and {len(accounts)}.")
+            raise typer.Exit(code=1)
+        selected = accounts[choice - 1]
+        profile_dir = selected["profile_dir"]
+        selected_authuser = selected.get("authuser", 0)
+        selected_email = selected.get("email") or email
+
     console.print("[bold yellow]⚡ Opening pairing connection to Google Colab...[/bold yellow]")
-    connect_resp = asyncio.run(trigger_daemon_connect())
+    connect_resp = asyncio.run(trigger_daemon_connect(profile_dir, selected_authuser, selected_email))
     if connect_resp.get("status") == "error":
         print_error(f"Failed to initiate connection: {connect_resp.get('message')}")
         raise typer.Exit(code=1)

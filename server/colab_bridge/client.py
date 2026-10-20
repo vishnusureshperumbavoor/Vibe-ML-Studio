@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 
 UVX_PATH = shutil.which("uvx") or os.path.expanduser("~/.local/bin/uvx")
 SERVER_CMD = [UVX_PATH, "--refresh", "git+https://github.com/googlecolab/colab-mcp"]
+BROWSER_WRAPPER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "open_colab_browser.py")
 
 def extract_text_from_result(result_obj: Any) -> str:
     """Extracts text content or raw result from an MCP tool response."""
@@ -69,6 +70,10 @@ class ColabMCPClient:
         self._pending_futures: Dict[int, asyncio.Future] = {}
         self._connected_event = asyncio.Event()
         self._reader_tasks: List[asyncio.Task] = []
+        self._connect_task: Optional[asyncio.Task] = None
+        self.profile_dir: Optional[str] = None
+        self.authuser: Optional[int] = None
+        self.google_email: Optional[str] = None
 
     def log(self, message: str):
         print(f"[ColabMCPInternal] {message}")
@@ -84,12 +89,28 @@ class ColabMCPClient:
             self.status_message = "Starting internal colab-mcp daemon..."
             self.log(f"Launching server: {' '.join(SERVER_CMD)}")
 
+            env = os.environ.copy()
+            env["BROWSER"] = BROWSER_WRAPPER
+            if self.profile_dir:
+                env["VSPAGENT_CHROME_PROFILE"] = self.profile_dir
+            else:
+                env.pop("VSPAGENT_CHROME_PROFILE", None)
+            if self.google_email:
+                env["VSPAGENT_GOOGLE_EMAIL"] = self.google_email
+            else:
+                env.pop("VSPAGENT_GOOGLE_EMAIL", None)
+            if self.authuser is not None:
+                env["VSPAGENT_GOOGLE_AUTHUSER"] = str(self.authuser)
+            else:
+                env.pop("VSPAGENT_GOOGLE_AUTHUSER", None)
+
             try:
                 self.proc = await asyncio.create_subprocess_exec(
                     *SERVER_CMD,
                     stdin=asyncio.subprocess.PIPE,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
+                    env=env,
                 )
             except Exception as e:
                 self.status = "error"
@@ -239,17 +260,62 @@ class ColabMCPClient:
         }
         return await self._send_request(msg)
 
+    async def select_profile(
+        self,
+        profile_dir: Optional[str],
+        authuser: Optional[int] = None,
+        email: Optional[str] = None,
+    ) -> None:
+        """Restarts the Colab MCP server with the selected Chrome profile and account."""
+        normalized = profile_dir.strip() if profile_dir else None
+        normalized_email = email.strip() if email else None
+        if (
+            normalized == self.profile_dir
+            and authuser == self.authuser
+            and normalized_email == self.google_email
+        ):
+            return
+
+        if self._connect_task and not self._connect_task.done():
+            self._connect_task.cancel()
+            self._connect_task = None
+
+        if self.proc is not None and self.proc.returncode is None:
+            await self.stop()
+
+        self.profile_dir = normalized
+        self.authuser = authuser
+        self.google_email = normalized_email
+        self._connected_event.clear()
+
+    async def _open_browser_and_wait(self):
+        try:
+            await self.call_tool("open_colab_browser_connection", {})
+            await self.refresh_tools()
+            if self.status != "connected":
+                self.status = "disconnected"
+                self.status_message = "Colab pairing timed out. Try connecting again."
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            self.status = "error"
+            self.status_message = f"Colab pairing failed: {e}"
+        finally:
+            self._connect_task = None
+
     async def connect_browser(self) -> Dict[str, Any]:
-        """Calls open_colab_browser_connection to pair with browser tab."""
+        """Opens the Colab browser tab and waits for pairing in the background."""
         if self.status == "connected":
             return {"status": "already_connected", "message": "Already connected to Colab."}
+
+        if self._connect_task and not self._connect_task.done():
+            return {"status": "connecting", "message": "Colab pairing is already in progress."}
 
         self.log("Calling open_colab_browser_connection...")
         self.status = "connecting"
         self.status_message = "Waiting for browser tab connection..."
-        res = await self.call_tool("open_colab_browser_connection", {})
-        await self.refresh_tools()
-        return {"status": "connecting", "result": res}
+        self._connect_task = asyncio.create_task(self._open_browser_and_wait())
+        return {"status": "connecting", "message": "Waiting for Colab tab to pair."}
 
     async def ensure_connected(self, timeout: float = 45.0):
         """Ensures a connected session exists."""
@@ -316,6 +382,10 @@ class ColabMCPClient:
         """Terminates internal server process."""
         self.status = "disconnected"
         self.status_message = "Server stopped."
+        if self._connect_task and not self._connect_task.done():
+            self._connect_task.cancel()
+            self._connect_task = None
+        self._connected_event.clear()
         for t in self._reader_tasks:
             t.cancel()
         if self.proc and self.proc.returncode is None:

@@ -1,0 +1,200 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT"
+
+API="http://127.0.0.1:2000"
+BACKEND_TIMEOUT="${BACKEND_TIMEOUT:-180}"
+PAIR_TIMEOUT="${COLAB_PAIR_TIMEOUT:-90}"
+LOG_DIR="$ROOT/logs"
+LOG_FILE="$LOG_DIR/backend.log"
+
+is_backend_up() {
+  curl -fsS --max-time 2 "$API/colab/status" >/dev/null 2>&1
+}
+
+is_connected() {
+  local body
+  body="$(curl -fsS --max-time 2 "$API/colab/status" 2>/dev/null || true)"
+  [[ "$body" =~ \"connected\"[[:space:]]*:[[:space:]]*true ]]
+}
+
+usage() {
+  cat <<'EOF'
+Usage: ./colab_start [options]
+
+Options:
+  -a, --account N     Connect using Chrome account N (see --list)
+  -p, --profile DIR   Connect using a specific Chrome profile directory
+  -u, --authuser N    Google account index within the profile (0 = first)
+  -e, --email EMAIL   Connect using a specific Google account email
+  -l, --list          List Chrome accounts and exit
+      --install       Install backend dependencies before starting
+  -h, --help          Show this help
+
+Environment:
+  BACKEND_TIMEOUT      Seconds to wait for the backend (default: 180)
+  COLAB_PAIR_TIMEOUT   Seconds to wait for Colab pairing (default: 90)
+EOF
+}
+
+INSTALL_ARG=()
+ACCOUNT=""
+PROFILE_DIR=""
+AUTHUSER=""
+ACCOUNT_EMAIL=""
+LIST_ONLY=false
+
+while (($#)); do
+  case "$1" in
+    --install)
+      INSTALL_ARG+=(--install)
+      shift
+      ;;
+    -a|--account)
+      ACCOUNT="${2:-}"
+      if [[ -z "$ACCOUNT" ]]; then
+        echo "Missing value for $1" >&2
+        exit 2
+      fi
+      shift 2
+      ;;
+    -p|--profile)
+      PROFILE_DIR="${2:-}"
+      if [[ -z "$PROFILE_DIR" ]]; then
+        echo "Missing value for $1" >&2
+        exit 2
+      fi
+      shift 2
+      ;;
+    -u|--authuser)
+      AUTHUSER="${2:-}"
+      if [[ -z "$AUTHUSER" ]]; then
+        echo "Missing value for $1" >&2
+        exit 2
+      fi
+      shift 2
+      ;;
+    -e|--email)
+      ACCOUNT_EMAIL="${2:-}"
+      if [[ -z "$ACCOUNT_EMAIL" ]]; then
+        echo "Missing value for $1" >&2
+        exit 2
+      fi
+      shift 2
+      ;;
+    -l|--list)
+      LIST_ONLY=true
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+
+if is_backend_up; then
+  echo "Backend already running at $API"
+else
+  mkdir -p "$LOG_DIR"
+  echo "Starting backend... (logs: $LOG_FILE)"
+
+  if command -v setsid >/dev/null 2>&1; then
+    if [[ ${#INSTALL_ARG[@]} -gt 0 ]]; then
+      nohup setsid node "$ROOT/scripts/launcher.mjs" server "${INSTALL_ARG[@]}" >"$LOG_FILE" 2>&1 &
+    else
+      nohup setsid node "$ROOT/scripts/launcher.mjs" server >"$LOG_FILE" 2>&1 &
+    fi
+  else
+    if [[ ${#INSTALL_ARG[@]} -gt 0 ]]; then
+      nohup node "$ROOT/scripts/launcher.mjs" server "${INSTALL_ARG[@]}" >"$LOG_FILE" 2>&1 &
+    else
+      nohup node "$ROOT/scripts/launcher.mjs" server >"$LOG_FILE" 2>&1 &
+    fi
+  fi
+
+  BACKEND_PID=$!
+  disown "$BACKEND_PID" 2>/dev/null || true
+  echo "Backend PID: $BACKEND_PID"
+
+  deadline=$((SECONDS + BACKEND_TIMEOUT))
+  until is_backend_up; do
+    if (( SECONDS >= deadline )); then
+      echo "Backend did not become ready within ${BACKEND_TIMEOUT}s." >&2
+      echo "Last log lines:" >&2
+      tail -n 30 "$LOG_FILE" >&2 || true
+      exit 1
+    fi
+    sleep 2
+  done
+  echo "Backend ready."
+fi
+
+if $LIST_ONLY; then
+  accounts="$(python3 "$ROOT/scripts/colab_accounts.py" list)"
+  if [[ -n "$accounts" ]]; then
+    echo "Available Chrome accounts:"
+    echo "$accounts"
+  else
+    echo "No Chrome accounts found."
+  fi
+  exit 0
+fi
+
+if is_connected; then
+  echo "Google Colab GPU is already connected."
+  exit 0
+fi
+
+if [[ -z "$PROFILE_DIR" && -z "$ACCOUNT_EMAIL" ]]; then
+  select_args=(select)
+  if [[ -n "$ACCOUNT" ]]; then
+    select_args+=(--account "$ACCOUNT")
+  fi
+  if ! selection="$(python3 "$ROOT/scripts/colab_accounts.py" "${select_args[@]}")"; then
+    echo "Account selection cancelled." >&2
+    exit 1
+  fi
+  if [[ -n "$selection" ]]; then
+    IFS=$'\t' read -r PROFILE_DIR AUTHUSER ACCOUNT_EMAIL <<< "$selection"
+  fi
+fi
+
+echo "Opening Google Colab pairing..."
+payload="$(python3 -c '
+import json, sys
+data = {}
+if sys.argv[1]:
+    data["profile_dir"] = sys.argv[1]
+if sys.argv[2]:
+    data["authuser"] = int(sys.argv[2])
+if sys.argv[3]:
+    data["email"] = sys.argv[3]
+print(json.dumps(data))
+' "$PROFILE_DIR" "$AUTHUSER" "$ACCOUNT_EMAIL")"
+
+if ! curl -fsS --max-time 20 -X POST -H "Content-Type: application/json" -d "$payload" "$API/colab/connect" >/dev/null; then
+  echo "Failed to trigger Colab connection." >&2
+  exit 1
+fi
+
+deadline=$((SECONDS + PAIR_TIMEOUT))
+until is_connected; do
+  if (( SECONDS >= deadline )); then
+    echo "Timed out waiting for Colab pairing after ${PAIR_TIMEOUT}s." >&2
+    echo "Current status:" >&2
+    curl -sS --max-time 5 "$API/colab/status" >&2 || true
+    echo >&2
+    exit 1
+  fi
+  sleep 2
+done
+
+echo "Google Colab GPU connected and ready."

@@ -47,6 +47,10 @@ def print_status_table(status_data: dict):
     table.add_row("Colab GPU Pairing", status_str)
     table.add_row("Daemon State", status_data.get("status", "unknown"))
     table.add_row("Status Message", status_data.get("message", "N/A"))
+    table.add_row("Chrome Profile", status_data.get("profile_dir") or "[dim]Default[/dim]")
+    table.add_row("Google Account", status_data.get("email") or "[dim]Default[/dim]")
+    authuser = status_data.get("authuser")
+    table.add_row("Google Account Index", str(authuser) if authuser is not None else "[dim]0[/dim]")
     
     tools = status_data.get("tools", [])
     tools_formatted = ", ".join(f"[dim]{t}[/dim]" for t in tools) if tools else "[dim]None[/dim]"
