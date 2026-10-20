@@ -58,7 +58,7 @@ BLURB_LEADERBOARD_STANDINGS = [
     },
     {
         "rank": "🎯",
-        "model": "VSP ML (Two-Phase Cloud GPU)",
+        "model": "VSP Agent (Two-Phase Cloud GPU)",
         "blurb_score": "Verified",
         "qa_accuracy": "71.4% (+59.0 gain)",
         "class_score": "78.6% (Yes) / 70.4% (No)",
@@ -341,9 +341,9 @@ results = {{
     }}
 }}
 
-print("###VSPML_BLURB_RESULT_START###")
+print("###VSPAGENT_BLURB_RESULT_START###")
 print(json.dumps(results))
-print("###VSPML_BLURB_RESULT_END###")
+print("###VSPAGENT_BLURB_RESULT_END###")
 '''
 
 
@@ -404,9 +404,9 @@ result = {{
     "probabilities": {{k: round(v, 4) for k, v in prob_dict.items()}}
 }}
 
-print("###VSPML_PREDICT_START###")
+print("###VSPAGENT_PREDICT_START###")
 print(json.dumps(result))
-print("###VSPML_PREDICT_END###")
+print("###VSPAGENT_PREDICT_END###")
 '''
 
 
@@ -459,9 +459,9 @@ model-index:
       value: {macro_f1}
 ---
 
-# VSP ML: PubMedQA Decision Model ({accuracy}% Accuracy) 🏥⚡
+# VSP Agent: PubMedQA Decision Model ({accuracy}% Accuracy) 🏥⚡
 
-Fine-tuned using **[VSP ML](https://github.com/vishnusureshperumbavoor/Vibe-ML-Studio)** on an **NVIDIA A100-SXM4 (80GB VRAM)**.
+Fine-tuned using **[VSP Agent](https://github.com/vishnusureshperumbavoor/Vibe-ML-Studio)** on an **NVIDIA A100-SXM4 (80GB VRAM)**.
 
 This model performs non-autoregressive **System 1 Clinical Decision Reasoning** over biomedical research questions and abstracts, classifying them into definitive verdicts: **`YES`**, **`NO`**, or **`MAYBE`** with sub-30ms latency.
 
@@ -514,7 +514,7 @@ for i, p in enumerate(probs):
 
 ## 🛠️ Training Details
 
-* **Framework**: [VSP ML CLI](https://github.com/vishnusureshperumbavoor/Vibe-ML-Studio)
+* **Framework**: [VSP Agent CLI](https://github.com/vishnusureshperumbavoor/Vibe-ML-Studio)
 * **Compute**: NVIDIA A100-SXM4 (80GB VRAM)
 * **Precision**: Native Bfloat16 (`bf16`)
 * **Context Length**: 512 tokens
@@ -564,6 +564,6 @@ api.upload_folder(
     ignore_patterns=["checkpoint-*", "*.bin"]
 )
 
-print(f"###VSPML_PUSH_SUCCESS###https://huggingface.co/{{repo_id}}###VSPML_PUSH_END###")
+print(f"###VSPAGENT_PUSH_SUCCESS###https://huggingface.co/{{repo_id}}###VSPAGENT_PUSH_END###")
 '''
 

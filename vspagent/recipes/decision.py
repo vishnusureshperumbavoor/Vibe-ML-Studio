@@ -48,7 +48,7 @@ import os
 import json
 import torch
 
-print("🚀 [Colab GPU] Initializing VSP ML Decision Model Engine...")
+print("🚀 [Colab GPU] Initializing VSP Agent Decision Model Engine...")
 print(f"📦 PyTorch Version: {{torch.__version__}} | Device: {{'cuda' if torch.cuda.is_available() else 'cpu'}}")
 if torch.cuda.is_available():
     print(f"⚡ GPU: {{torch.cuda.get_device_name(0)}} ({{round(torch.cuda.get_device_properties(0).total_memory / 1e9, 2)}} GB)")
@@ -147,11 +147,11 @@ model.config.label2id = label2id
 model.save_pretrained(output_dir)
 tokenizer.save_pretrained(output_dir)
 
-with open(os.path.join(output_dir, "vspml_meta.json"), "w") as f:
+with open(os.path.join(output_dir, "vspagent_meta.json"), "w") as f:
     json.dump({{"labels": labels, "id2label": id2label, "model_id": model_id}}, f, indent=2)
 
 print("=" * 60)
-print(f"✅ [VSP ML] Decision Model Training Complete!")
+print(f"✅ [VSP Agent] Decision Model Training Complete!")
 print(f"📈 Final Loss: {{train_result.training_loss:.4f}}")
 print(f"📁 Output Saved: {{output_dir}}")
 print("=" * 60)
@@ -181,7 +181,7 @@ if not os.path.exists(model_path):
     # Fallback to base model for zero-shot decision preview
     model_path = "answerdotai/ModernBERT-base"
 
-meta_file = os.path.join(model_path, "vspml_meta.json")
+meta_file = os.path.join(model_path, "vspagent_meta.json")
 id2label = {{}}
 if os.path.exists(meta_file):
     try:
@@ -221,6 +221,6 @@ result = {{
     }}
 }}
 
-print("###VSPML_PREDICT_START###" + json.dumps(result) + "###VSPML_PREDICT_END###")
+print("###VSPAGENT_PREDICT_START###" + json.dumps(result) + "###VSPAGENT_PREDICT_END###")
 '''
     return script.strip()

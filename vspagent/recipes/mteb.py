@@ -56,7 +56,7 @@ result = {{
     "text2": text2
 }}
 
-print("###VSPML_MTEB_START###")
+print("###VSPAGENT_MTEB_START###")
 print(json.dumps(result))
-print("###VSPML_MTEB_END###")
+print("###VSPAGENT_MTEB_END###")
 '''

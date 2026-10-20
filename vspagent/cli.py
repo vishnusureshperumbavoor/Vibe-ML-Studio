@@ -7,9 +7,9 @@ from typing import Optional
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.panel import Panel
 from rich.table import Table
-from vspml.ui import console, print_banner, print_success, print_error, print_status_table
-from vspml.colab import fetch_daemon_status, trigger_daemon_connect, wait_for_colab_pairing, execute_remote_code
-from vspml.recipes import (
+from vspagent.ui import console, print_banner, print_success, print_error, print_status_table
+from vspagent.colab import fetch_daemon_status, trigger_daemon_connect, wait_for_colab_pairing, execute_remote_code
+from vspagent.recipes import (
     generate_decision_training_script,
     generate_decision_prediction_script,
     DEFAULT_DEMO_DATASET,
@@ -23,8 +23,8 @@ from vspml.recipes import (
 )
 
 app = typer.Typer(
-    name="vspml",
-    help="VSP ML — Zero-VRAM Decision Model CLI via Google Colab MCP",
+    name="vspagent",
+    help="VSP Agent — Zero-VRAM Decision Model CLI via Google Colab MCP",
     no_args_is_help=True,
     add_completion=False,
 )
@@ -70,7 +70,7 @@ def connect(
     status = asyncio.run(fetch_daemon_status())
     if not status:
         print_error(
-            "VSP ML Daemon is not reachable on http://127.0.0.1:2000.\n"
+            "VSP Agent Daemon is not reachable on http://127.0.0.1:2000.\n"
             "Please ensure the backend server is running (`npm run start:server`).",
             title="Daemon Offline"
         )
@@ -107,7 +107,7 @@ def connect(
             "Timed out waiting for Colab tab to pair.\n"
             "• Ensure your browser tab at colab.research.google.com finished loading.\n"
             "• Verify Colab has internet access and can connect to localhost.\n"
-            "• Run `vspml status` to check connection state.",
+            "• Run `vspagent status` to check connection state.",
             title="Pairing Timeout"
         )
         raise typer.Exit(code=1)
@@ -122,7 +122,7 @@ def status():
     status_data = asyncio.run(fetch_daemon_status())
     if not status_data:
         print_error(
-            "VSP ML Daemon is offline or unreachable on http://127.0.0.1:2000.",
+            "VSP Agent Daemon is offline or unreachable on http://127.0.0.1:2000.",
             title="Daemon Offline"
         )
         raise typer.Exit(code=1)
@@ -133,10 +133,10 @@ def status():
 @app.command()
 def version():
     """
-    Show VSP ML CLI version.
+    Show VSP Agent CLI version.
     """
     print_banner()
-    console.print("[bold white]VSP ML CLI Version:[/bold white] [bold cyan]0.1.0[/bold cyan]")
+    console.print("[bold white]VSP Agent CLI Version:[/bold white] [bold cyan]0.1.0[/bold cyan]")
     console.print("[dim]Target: Decision Model Engine (Laya / ModernBERT)[/dim]")
 
 
@@ -161,7 +161,7 @@ def decision_train(
     if not status or not status.get("connected"):
         print_error(
             "Google Colab GPU is not connected!\n"
-            "Run [bold cyan]vspml connect[/bold cyan] to pair your Colab session first.",
+            "Run [bold cyan]vspagent connect[/bold cyan] to pair your Colab session first.",
             title="Colab Not Connected"
         )
         raise typer.Exit(code=1)
@@ -254,7 +254,7 @@ def decision_train(
         f"Decision Model fine-tuning completed successfully!\n"
         f"• Base Backbone: {model}\n"
         f"• Checkpoint: {output}\n"
-        f"• Ready for instant testing with `vspml decision predict`",
+        f"• Ready for instant testing with `vspagent decision predict`",
         title="Training Complete"
     )
 
@@ -273,7 +273,7 @@ def decision_predict(
     if not status or not status.get("connected"):
         print_error(
             "Google Colab GPU is not connected!\n"
-            "Run [bold cyan]vspml connect[/bold cyan] first.",
+            "Run [bold cyan]vspagent connect[/bold cyan] first.",
             title="Colab Not Connected"
         )
         raise typer.Exit(code=1)
@@ -300,7 +300,7 @@ def decision_predict(
     import re
 
     # 1. Check for delimiter in raw_output
-    match = re.search(r'###VSPML_PREDICT_START###(.*?)###VSPML_PREDICT_END###', raw_output, re.DOTALL)
+    match = re.search(r'###VSPAGENT_PREDICT_START###(.*?)###VSPAGENT_PREDICT_END###', raw_output, re.DOTALL)
     if match:
         try:
             pred_data = json.loads(match.group(1).strip())
@@ -315,11 +315,11 @@ def decision_predict(
             for out in parsed_json.get("outputs", []):
                 all_text.extend(out.get("text", []))
             combined_text = "".join(all_text)
-            m = re.search(r'###VSPML_PREDICT_START###(.*?)###VSPML_PREDICT_END###', combined_text, re.DOTALL)
+            m = re.search(r'###VSPAGENT_PREDICT_START###(.*?)###VSPAGENT_PREDICT_END###', combined_text, re.DOTALL)
             if m:
                 pred_data = json.loads(m.group(1).strip())
-            elif "VSPML_PREDICT_RESULT:" in combined_text:
-                clean_str = combined_text.split("VSPML_PREDICT_RESULT:")[1].strip()
+            elif "VSPAGENT_PREDICT_RESULT:" in combined_text:
+                clean_str = combined_text.split("VSPAGENT_PREDICT_RESULT:")[1].strip()
                 pred_data = json.loads(clean_str)
         except Exception:
             pass
@@ -406,14 +406,14 @@ def blurb_leaderboard():
 
     console.print(table)
     console.print(
-        "\n[dim]Run [bold cyan]vspml blurb train --dataset pubmedqa[/bold cyan] to train your model "
+        "\n[dim]Run [bold cyan]vspagent blurb train --dataset pubmedqa[/bold cyan] to train your model "
         "and benchmark directly against Microsoft PubMedBERT & BioLinkBERT.[/dim]\n"
     )
 
 
 @blurb_app.command("status")
 def blurb_status_alias():
-    """Alias for vspml blurb leaderboard."""
+    """Alias for vspagent blurb leaderboard."""
     blurb_leaderboard()
 
 
@@ -435,7 +435,7 @@ def blurb_train(
     if not status or not status.get("connected"):
         print_error(
             "Google Colab GPU is not connected!\n"
-            "Run [bold cyan]vspml connect[/bold cyan] first to pair with your Colab tab.",
+            "Run [bold cyan]vspagent connect[/bold cyan] first to pair with your Colab tab.",
             title="Colab Not Connected"
         )
         raise typer.Exit(code=1)
@@ -512,7 +512,7 @@ def blurb_train(
     # Parse structured benchmark result
     import re
     bench_data = None
-    m = re.search(r'###VSPML_BLURB_RESULT_START###(.*?)###VSPML_BLURB_RESULT_END###', raw_output, re.DOTALL)
+    m = re.search(r'###VSPAGENT_BLURB_RESULT_START###(.*?)###VSPAGENT_BLURB_RESULT_END###', raw_output, re.DOTALL)
     if m:
         try:
             bench_data = json.loads(m.group(1).strip())
@@ -521,7 +521,7 @@ def blurb_train(
 
     if not bench_data:
         combined = "\n".join(clean_lines)
-        m = re.search(r'###VSPML_BLURB_RESULT_START###(.*?)###VSPML_BLURB_RESULT_END###', combined, re.DOTALL)
+        m = re.search(r'###VSPAGENT_BLURB_RESULT_START###(.*?)###VSPAGENT_BLURB_RESULT_END###', combined, re.DOTALL)
         if m:
             try:
                 bench_data = json.loads(m.group(1).strip())
@@ -543,7 +543,7 @@ def blurb_train(
         comp_table.add_column("Status / Comparison", width=28)
 
         comp_table.add_row(
-            "[bold cyan]VSP ML (Your Fine-Tuned Model)[/bold cyan]",
+            "[bold cyan]VSP Agent (Your Fine-Tuned Model)[/bold cyan]",
             f"[bold green]{acc_pct}%[/bold green]",
             "[bold green]▶ Evaluated on 500 Test Samples[/bold green]"
         )
@@ -578,7 +578,7 @@ def blurb_train(
             f"No=[bold cyan]{round(class_f1.get('no', 0.0)*100, 1)}%[/bold cyan] | "
             f"Maybe=[bold cyan]{round(class_f1.get('maybe', 0.0)*100, 1)}%[/bold cyan]\n"
             f"• Saved Checkpoint: [dim]{output}[/dim]\n\n"
-            f"[bold yellow]Next Step:[/bold yellow] Test live decisions with `vspml blurb predict` or upload to Hugging Face!"
+            f"[bold yellow]Next Step:[/bold yellow] Test live decisions with `vspagent blurb predict` or upload to Hugging Face!"
         )
         console.print(Panel(f1_text, title="[bold green]BLURB Results Verified[/bold green]", border_style="green"))
     else:
@@ -601,7 +601,7 @@ def blurb_predict(
 
     status = asyncio.run(fetch_daemon_status())
     if not status or not status.get("connected"):
-        print_error("Google Colab GPU is not connected! Run `vspml connect` first.")
+        print_error("Google Colab GPU is not connected! Run `vspagent connect` first.")
         raise typer.Exit(code=1)
 
     console.print(f"[bold white]Question:[/bold white] [bold cyan]{question}[/bold cyan]")
@@ -626,7 +626,7 @@ def blurb_predict(
     import re
     pred_data = None
 
-    m = re.search(r'###VSPML_PREDICT_START###(.*?)###VSPML_PREDICT_END###', raw_output, re.DOTALL)
+    m = re.search(r'###VSPAGENT_PREDICT_START###(.*?)###VSPAGENT_PREDICT_END###', raw_output, re.DOTALL)
     if m:
         try:
             pred_data = json.loads(m.group(1).strip())
@@ -640,11 +640,11 @@ def blurb_predict(
             for out in parsed_json.get("outputs", []):
                 all_text.extend(out.get("text", []))
             combined_text = "".join(all_text)
-            m = re.search(r'###VSPML_PREDICT_START###(.*?)###VSPML_PREDICT_END###', combined_text, re.DOTALL)
+            m = re.search(r'###VSPAGENT_PREDICT_START###(.*?)###VSPAGENT_PREDICT_END###', combined_text, re.DOTALL)
             if m:
                 pred_data = json.loads(m.group(1).strip())
-            elif "VSPML_PREDICT_RESULT:" in combined_text:
-                clean_str = combined_text.split("VSPML_PREDICT_RESULT:")[1].strip()
+            elif "VSPAGENT_PREDICT_RESULT:" in combined_text:
+                clean_str = combined_text.split("VSPAGENT_PREDICT_RESULT:")[1].strip()
                 pred_data = json.loads(clean_str)
         except Exception:
             pass
@@ -688,7 +688,7 @@ def blurb_predict(
 
 @blurb_app.command("push")
 def blurb_push(
-    repo_id: str = typer.Option("vishnusureshperumbavoor/vspml-pubmedqa-decision-a100", "--repo-id", "-r", help="Target Hugging Face repository ID (e.g. username/repo-name)"),
+    repo_id: str = typer.Option("vishnusureshperumbavoor/vspagent-pubmedqa-decision-a100", "--repo-id", "-r", help="Target Hugging Face repository ID (e.g. username/repo-name)"),
     checkpoint_dir: str = typer.Option("./a100_pubmedqa_final", "--checkpoint-dir", "-c", help="Path to checkpoint directory on Google Colab"),
     token: Optional[str] = typer.Option(None, "--token", "-t", help="Hugging Face write token (defaults to HF_TOKEN from .env)"),
     accuracy: float = typer.Option(71.4, "--accuracy", "-a", help="Reported test accuracy score for model card"),
@@ -717,7 +717,7 @@ def blurb_push(
 
     status = asyncio.run(fetch_daemon_status())
     if not status or not status.get("connected"):
-        print_error("Google Colab GPU is not connected! Run `vspml connect` first.")
+        print_error("Google Colab GPU is not connected! Run `vspagent connect` first.")
         raise typer.Exit(code=1)
 
     console.print(f"[bold white]Target Hugging Face Repo:[/bold white] [bold cyan]{repo_id}[/bold cyan]")
@@ -748,9 +748,9 @@ def blurb_push(
 
     raw_output = res.get("output", "")
     success_url = f"https://huggingface.co/{repo_id}"
-    if "###VSPML_PUSH_SUCCESS###" in raw_output:
+    if "###VSPAGENT_PUSH_SUCCESS###" in raw_output:
         import re
-        m = re.search(r'###VSPML_PUSH_SUCCESS###(.*?)###VSPML_PUSH_END###', raw_output)
+        m = re.search(r'###VSPAGENT_PUSH_SUCCESS###(.*?)###VSPAGENT_PUSH_END###', raw_output)
         if m:
             success_url = m.group(1).strip()
 
@@ -761,7 +761,7 @@ def blurb_push(
         f"[bold white]Benchmark Result:[/bold white] [bold green]{accuracy}% Test Accuracy (+59.0 Net Gain)[/bold green]\n"
         f"[bold white]Artifacts Uploaded:[/bold white] [dim]model.safetensors, tokenizer, config.json, README.md[/dim]\n\n"
         f"[bold yellow]Test Live CLI Inference:[/bold yellow]\n"
-        f"[dim]vspml blurb predict --model-dir {repo_id} -q \"Do GLP-1 agonists improve renal outcomes?\" -c \"...\"[/dim]"
+        f"[dim]vspagent blurb predict --model-dir {repo_id} -q \"Do GLP-1 agonists improve renal outcomes?\" -c \"...\"[/dim]"
     )
     console.print(Panel(summary_panel, title="[bold green]Hugging Face Deployment[/bold green]", border_style="green"))
 
@@ -796,7 +796,7 @@ def mteb_leaderboard():
     console.print(
         "\n[dim]Model ID:[/dim] [bold cyan]vishnusureshperumbavoor/vsp-agent-biomed-embedding-a100[/bold cyan]\n"
         "[dim]Hugging Face Repository:[/dim] [cyan underline]https://huggingface.co/vishnusureshperumbavoor/vsp-agent-biomed-embedding-a100[/cyan underline]\n"
-        "[dim]Run [bold cyan]vspml mteb predict[/bold cyan] to test live clinical cosine similarities.[/dim]\n"
+        "[dim]Run [bold cyan]vspagent mteb predict[/bold cyan] to test live clinical cosine similarities.[/dim]\n"
     )
 
 
@@ -813,7 +813,7 @@ def mteb_predict(
 
     status = asyncio.run(fetch_daemon_status())
     if not status or not status.get("connected"):
-        print_error("Google Colab GPU is not connected! Run `vspml connect` first.")
+        print_error("Google Colab GPU is not connected! Run `vspagent connect` first.")
         raise typer.Exit(code=1)
 
     console.print(f"[bold white]Text 1:[/bold white] [bold cyan]{text1}[/bold cyan]")
@@ -839,7 +839,7 @@ def mteb_predict(
     import re
     pred_data = None
 
-    m = re.search(r'###VSPML_MTEB_START###(.*?)###VSPML_MTEB_END###', raw_output, re.DOTALL)
+    m = re.search(r'###VSPAGENT_MTEB_START###(.*?)###VSPAGENT_MTEB_END###', raw_output, re.DOTALL)
     if m:
         try:
             pred_data = json.loads(m.group(1).strip())
@@ -853,7 +853,7 @@ def mteb_predict(
             for out in parsed_json.get("outputs", []):
                 all_text.extend(out.get("text", []))
             combined_text = "".join(all_text)
-            m = re.search(r'###VSPML_MTEB_START###(.*?)###VSPML_MTEB_END###', combined_text, re.DOTALL)
+            m = re.search(r'###VSPAGENT_MTEB_START###(.*?)###VSPAGENT_MTEB_END###', combined_text, re.DOTALL)
             if m:
                 pred_data = json.loads(m.group(1).strip())
         except Exception:
