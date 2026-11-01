@@ -19,7 +19,7 @@ Unlike a chat where everything is just a bubble, your agent treats the Notebook 
 
 Adding markdown documentation cells.
 Writing and executing code cells.
-Embedding visualizations (like medical image slices) directly into the UI.
+Embedding visualizations (such as image batch slices and confusion matrices) directly into the UI.
 5. Self-Correction
 If a Python execution fails, a standard chatbot might just apologize. Your agent receives the error log back into its context, analyzes why it failed, and autonomously tries a fix in the next turn of its loop.
 

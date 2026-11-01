@@ -17,9 +17,9 @@ A strategic roadmap of competitive machine learning, prize pool platforms, and a
 ## 📊 Platform Deep Dives
 
 ### 1. Kaggle Prize Competitions
-* **Target Domain:** Computer Vision (Radiology / DICOM), Biomedical NLP, Multimodal Classification.
+* **Target Domain:** Computer Vision, NLP, Multimodal Classification, Tabular Modeling.
 * **Cash Mechanics:**
-  * Major featured challenges offer **$50,000 to $100,000+** total prize pools (e.g., *RSNA Knee Abnormality Detection*: $77,000; *Recod.ai Scientific Image Forgery*: $55,000).
+  * Major featured challenges offer **$50,000 to $100,000+** total prize pools (e.g., *Recod.ai Scientific Image Forgery*: $55,000).
   * 1st Place typically wins **$25,000 – $40,000**.
   * Code Competitions evaluate on hidden private test sets with offline GPU kernels.
 * **Secondary Monetization:**
@@ -44,5 +44,3 @@ A strategic roadmap of competitive machine learning, prize pool platforms, and a
 
 ## 🔗 Related Documentation
 * [VSP Agents Leaderboard Strategy](file:///home/vishnusureshperumbavoor/Desktop/Vibe-ML-Studio/VSP_AGENTS_LEADERBOARD_STRATEGY.md)
-* [Open Medical-LLM Strategy](file:///home/vishnusureshperumbavoor/Desktop/Vibe-ML-Studio/OPEN_MEDICAL_LLM_STRATEGY.md)
-* [Medical AI Prompt Library](file:///home/vishnusureshperumbavoor/Desktop/Vibe-ML-Studio/blogs/medical-prompts.md)

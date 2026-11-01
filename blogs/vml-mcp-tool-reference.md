@@ -13,7 +13,7 @@ This document serves as a technical reference for the tools exposed by the **Vib
 ### `dataset_search`
 *   **Description**: Search for training datasets on the Hugging Face Hub.
 *   **Parameters**:
-    *   `query` (string): The search term (e.g., "medical JSONL").
+    *   `query` (string): The search term (e.g., "instructions JSONL").
     *   `limit` (integer): Max results to return.
 
 ## 🏋️ Training & Provisioning Tools

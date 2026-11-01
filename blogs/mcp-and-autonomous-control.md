@@ -32,7 +32,7 @@ By adding this to your `claude_desktop_config.json`, you give Claude "Remote Con
 
 When you connect VML to an external agent like Claude or Cursor, you unlock **Autonomous Tool-Calling**:
 
-1.  **Remote Training Orchestration**: You can say, *"Claude, start a 500-step training job on the medical dataset,"* and Claude will call the `start_sft_job` tool to prepare the VML notebook blocks.
+1.  **Remote Training Orchestration**: You can say, *"Claude, start a 500-step training job on the Alpaca dataset,"* and Claude will call the `start_sft_job` tool to prepare the VML notebook blocks.
 2.  **Hardware-Aware Decision Making**: Using `get_system_specs`, an agent can decide whether your local machine can handle a 7B model or if it should fall back to a 0.5B tiny-model for CPU training.
 3.  **Semantic Knowledge Mining**: You can point Claude to a PDF, and it will use VML's `ingest_knowledge` tool to index it into your local RAG database without you ever leaving the chat interface.
 4.  **Local-to-Cloud Deployment**: Agents can monitor your training progress and, once a threshold is met, trigger an autonomous upload to Hugging Face via the VML deployment pipeline.

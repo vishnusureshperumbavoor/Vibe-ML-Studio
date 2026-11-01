@@ -7,7 +7,7 @@ MMLU (Massive Multitask Language Understanding): This is the "Science/General Kn
 GSM8K: This is the "Math" test (Grade School Math). It tests Reasoning. A model can't just memorize this; it has to "think" through steps to get the right answer.
 HumanEval / MBPP: These are "Coding" benchmarks. They test if the model can actually write functional code.
 2. Why this matters for your Project: "Catastrophic Forgetting"
-This is a killer point for your demo! When you fine-tune a model on your custom data (e.g., your "Sales Expert" or "Medical Doc"), there is a risk called Catastrophic Forgetting.
+This is a killer point for your demo! When you fine-tune a model on your custom data (e.g., your "Sales Expert" or "Customer Support Bot"), there is a risk called Catastrophic Forgetting.
 
 The Problem: The model becomes so good at your data that it forgets how to do Math or basic Science. It loses its general intelligence.
 The Test: You run MMLU before and after fine-tuning.
