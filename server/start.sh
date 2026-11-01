@@ -36,8 +36,13 @@ source venv/bin/activate
 PYTHON_CMD="$(which python 2>/dev/null || which python3 2>/dev/null || echo "python3")"
 echo "==> Using Python: $PYTHON_CMD"
 
-# Ensure repo root is on PYTHONPATH
-export PYTHONPATH="$(cd .. && pwd):${PYTHONPATH:-}"
+# Ensure repo root and external vspagent are on PYTHONPATH
+EXTERNAL_VSPAGENT="$(cd ../.. && pwd)/vspagent"
+if [ -d "$EXTERNAL_VSPAGENT" ]; then
+  export PYTHONPATH="$EXTERNAL_VSPAGENT:$(cd .. && pwd):${PYTHONPATH:-}"
+else
+  export PYTHONPATH="$(cd .. && pwd):${PYTHONPATH:-}"
+fi
 
 # Install dependencies only when --install is passed
 if [ "$DO_INSTALL" = true ]; then
