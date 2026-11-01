@@ -8,6 +8,12 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 3000,
         host: '0.0.0.0',
+        watch: {
+          ignored: ['**/server/**', '**/venv/**']
+        }
+      },
+      optimizeDeps: {
+        entries: ['index.html']
       },
       plugins: [react()],
       define: {
@@ -21,4 +27,4 @@ export default defineConfig(({ mode }) => {
       }
     };
 });
-// Trigger restart 2
+

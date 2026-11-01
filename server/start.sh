@@ -19,11 +19,25 @@ if [ ! -d venv ]; then
   python3 -m venv venv
 else
   echo "==> Existing virtual environment found at $(pwd)/venv"
+  # Repair venv if path moved or bin links are stale
+  if [ ! -f venv/bin/activate ] || ! grep -q "$(pwd)/venv" venv/bin/activate 2>/dev/null; then
+    echo "==> Updating virtual environment paths..."
+    python3 -m venv --upgrade venv 2>/dev/null || true
+  fi
+fi
+
+# Ensure python symlink exists
+if [ ! -f venv/bin/python ] && [ -f venv/bin/python3 ]; then
+  ln -sf python3 venv/bin/python
 fi
 
 # Activate virtual environment
 source venv/bin/activate
-echo "==> Using Python: $(which python)"
+PYTHON_CMD="$(which python 2>/dev/null || which python3 2>/dev/null || echo "python3")"
+echo "==> Using Python: $PYTHON_CMD"
+
+# Ensure repo root is on PYTHONPATH
+export PYTHONPATH="$(cd .. && pwd):${PYTHONPATH:-}"
 
 # Install dependencies only when --install is passed
 if [ "$DO_INSTALL" = true ]; then
@@ -43,5 +57,5 @@ echo "==> Ensuring port 2000 is available..."
 fuser -k 2000/tcp 2>/dev/null || true
 
 echo "==> Starting backend server..."
-python main.py
+"$PYTHON_CMD" main.py
 
