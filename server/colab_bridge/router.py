@@ -42,6 +42,12 @@ async def get_accounts():
     return {"accounts": discover_chrome_accounts()}
 
 
+@router.post("/refresh")
+async def refresh_colab():
+    """Forces refreshing tools from the Colab MCP daemon."""
+    await internal_colab_client.refresh_tools()
+    return await get_status()
+
 @router.post("/connect")
 async def connect_colab(req: Optional[ConnectRequest] = Body(default=None)):
     """Triggers pairing with Google Colab tab."""

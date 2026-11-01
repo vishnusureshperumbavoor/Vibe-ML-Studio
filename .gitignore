@@ -55,5 +55,7 @@ build/
 nlp_comp_data/
 tmp_test_model/
 
-# Assets
+# Assets & Training Datasets
 assets/
+*.jsonl
+

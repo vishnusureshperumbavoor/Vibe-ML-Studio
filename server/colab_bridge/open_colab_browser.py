@@ -121,12 +121,22 @@ def main():
     if len(sys.argv) < 2:
         return 2
 
-    url = sys.argv[1]
+    raw_url = sys.argv[1]
+    with open("/tmp/colab_mcp_url.txt", "w") as f:
+        f.write(raw_url + "\n")
+    print(f"[open_colab_browser] Received URL: {raw_url}", flush=True)
+
     email = os.environ.get("VSPAGENT_GOOGLE_EMAIL") or ""
-    if email:
-        url = _with_account_email(url, email)
-    else:
-        url = _with_authuser(url, os.environ.get("VSPAGENT_GOOGLE_AUTHUSER"))
+    authuser = os.environ.get("VSPAGENT_GOOGLE_AUTHUSER")
+    if not authuser and email:
+        try:
+            from chrome_profiles import find_chrome_account
+            acct = find_chrome_account(email=email)
+            if acct and acct.get("authuser") is not None:
+                authuser = acct["authuser"]
+        except Exception:
+            pass
+    url = _with_authuser(raw_url, authuser)
     profile_dir = os.environ.get("VSPAGENT_CHROME_PROFILE") or ""
 
     for candidate in _chrome_candidates():
